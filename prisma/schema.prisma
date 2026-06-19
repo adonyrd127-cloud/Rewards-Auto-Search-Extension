@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model SearchSession {
+  id          String   @id @default(cuid())
+  mode        String   @default("desktop") // desktop, mobile, edge
+  status      String   @default("idle") // idle, running, paused, completed, stopped
+  totalSearches Int    @default(0)
+  completedSearches Int @default(0)
+  pointsEarned  Int    @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entries     SearchEntry[]
+}
+
+model SearchEntry {
+  id          String   @id @default(cuid())
+  sessionId   String
+  query       String
+  status      String   @default("pending") // pending, searching, completed, failed, skipped
+  pointsEarned Int    @default(0)
+  searchIndex Int
+  duration    Int     @default(0) // milliseconds
+  searchedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  session     SearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SearchSettings {
+  id                    String   @id @default(cuid())
+  desktopSearchCount    Int      @default(30)
+  mobileSearchCount     Int      @default(20)
+  edgeSearchCount       Int      @default(30)
+  minDelay              Int      @default(15) // seconds
+  maxDelay              Int      @default(45) // seconds
+  cooldownBetweenSearches Int    @default(5) // seconds
+  enableRandomDelay     Boolean  @default(true)
+  enableAutoStart       Boolean  @default(false)
+  autoStartTime         String   @default("09:00")
+  enableMobileMode      Boolean  @default(true)
+  enableEdgeMode        Boolean  @default(false)
+  querySource           String   @default("trending") // trending, random, custom
+  customQueries         String   @default("") // comma-separated custom queries
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model DailyStats {
+  id              String   @id @default(cuid())
+  date            String   @unique // YYYY-MM-DD
+  desktopSearches Int      @default(0)
+  mobileSearches  Int      @default(0)
+  edgeSearches    Int      @default(0)
+  totalPoints     Int      @default(0)
+  sessionsRun     Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ScheduleConfig {
+  id              String   @id @default(cuid())
+  enabled         Boolean  @default(false)
+  desktopTime     String   @default("09:00")
+  mobileTime      String   @default("12:00")
+  edgeTime        String   @default("18:00")
+  runDesktop      Boolean  @default(true)
+  runMobile       Boolean  @default(true)
+  runEdge         Boolean  @default(false)
+  daysOfWeek      String   @default("1,2,3,4,5,6,7") // comma-separated day numbers
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
