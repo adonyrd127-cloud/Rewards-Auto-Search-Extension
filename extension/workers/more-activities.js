@@ -86,7 +86,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    console.warn(`${TAG} No se pudo localizar la sección More Activities`);
+    console.log(`${TAG} No se pudo localizar la sección More Activities`);
     return null;
   }
 
@@ -155,7 +155,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
 
     const section = _findMoreActivitiesSection();
     if (!section) {
-      console.warn(`${TAG} Sección no encontrada — devolviendo lista vacía`);
+      console.log(`${TAG} Sección no encontrada — devolviendo lista vacía`);
       return [];
     }
 
@@ -263,7 +263,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         try {
           onProgress(i, pending.length, task.title);
         } catch (cbErr) {
-          console.warn(`${TAG} Error en callback onProgress:`, cbErr);
+          console.log(`${TAG} Error en callback onProgress:`, cbErr);
         }
       }
 

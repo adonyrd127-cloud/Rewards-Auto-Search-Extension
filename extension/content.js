@@ -217,25 +217,25 @@ async function runFullScan(panel, globalStatus, claimAllBtn) {
       if (window.RewardsWorkers && window.RewardsWorkers.DailySet) {
         results.dailySet = await window.RewardsWorkers.DailySet.scan();
       }
-    } catch (e) { console.warn("[RewardsBot] Error escaneando Daily Set:", e); }
+    } catch (e) { console.log("[RewardsBot] Error escaneando Daily Set:", e); }
 
     try {
       if (window.RewardsWorkers && window.RewardsWorkers.MoreActivities) {
         results.moreActivities = await window.RewardsWorkers.MoreActivities.scan();
       }
-    } catch (e) { console.warn("[RewardsBot] Error escaneando More Activities:", e); }
+    } catch (e) { console.log("[RewardsBot] Error escaneando More Activities:", e); }
 
     try {
       if (window.RewardsWorkers && window.RewardsWorkers.PunchCards) {
         results.punchCards = await window.RewardsWorkers.PunchCards.scan();
       }
-    } catch (e) { console.warn("[RewardsBot] Error escaneando Punch Cards:", e); }
+    } catch (e) { console.log("[RewardsBot] Error escaneando Punch Cards:", e); }
 
     try {
       if (window.RewardsWorkers && window.RewardsWorkers.StreakBonus) {
         results.streakBonus = await window.RewardsWorkers.StreakBonus.scan();
       }
-    } catch (e) { console.warn("[RewardsBot] Error escaneando Streak Bonus:", e); }
+    } catch (e) { console.log("[RewardsBot] Error escaneando Streak Bonus:", e); }
 
     // Actualizar la UI del panel con los resultados
     updatePanelUI(results, claimAllBtn, globalStatus, panel);
@@ -465,7 +465,7 @@ async function runClaimAll(results, claimBtn, globalStatus) {
         await claimSingleTask(task);
       }
     } catch (e) {
-      console.warn(`[RewardsBot] Error procesando tarea "${task.title}":`, e);
+      console.log(`[RewardsBot] Error procesando tarea "${task.title}":`, e);
     }
 
     completed++;
