@@ -483,7 +483,7 @@ async function runClaimAll(results, claimBtn, globalStatus) {
   if (progressPct) progressPct.innerText = "100%";
   if (progressBar) progressBar.style.width = "100%";
 
-  globalStatus.innerHTML = `<span style="color:#10b981;">🎉</span> ¡Todas las tareas procesadas! Recargando...`;
+  globalStatus.innerHTML = `<span style="color:#10b981;">🎉</span> ¡Todas las tareas procesadas! Navegando...`;
 
   claimBtn.innerText = "✅ Completado";
 
@@ -495,8 +495,18 @@ async function runClaimAll(results, claimBtn, globalStatus) {
     });
   } catch (e) { /* popup may be closed */ }
 
-  // Recargar después de un momento
-  setTimeout(() => window.location.reload(), 4000);
+  // Determinar si estamos en dashboard o earn
+  const isDashboard = window.location.pathname.includes("dashboard") || window.location.pathname === "/";
+  const isEarn = window.location.pathname.includes("earn");
+
+  // Recargar o cambiar de página después de un momento
+  setTimeout(() => {
+    if (isDashboard) {
+      window.location.href = "https://rewards.bing.com/earn";
+    } else {
+      window.location.reload();
+    }
+  }, 4000);
 }
 
 // ============================================================
@@ -565,7 +575,8 @@ function solveActiveTasks() {
   const startQuizBtn = document.getElementById("rqStartQuiz")
     || document.querySelector("[id*='startquiz' i]")
     || document.querySelector(".rqStartQuiz")
-    || document.querySelector("#quizWelcomeContainer input[type='button']");
+    || document.querySelector("#quizWelcomeContainer input[type='button']")
+    || document.querySelector(".rw_btn[value*='Start' i], .rw_btn[value*='Comenzar' i], .wk_button[value*='Start' i]");
 
   if (startQuizBtn && startQuizBtn.style.display !== "none" && !startQuizBtn.classList.contains("rqHdn")) {
     console.log("[RewardsBot] Botón de inicio de Quiz encontrado.");
@@ -579,7 +590,8 @@ function solveActiveTasks() {
   // 3. Quiz en progreso — seleccionar opciones
   const quizOptions = Array.from(document.querySelectorAll(
     ".rqOption, .rqOptionCard, [id*='rqOption'], #rqAnswerOption0, #rqAnswerOption1, " +
-    ".wk_OptionClickClass, [data-option], .btOption, #bt_option0, #bt_option1, #bt_option2, #bt_option3"
+    ".wk_OptionClickClass, [data-option], .btOption, #bt_option0, #bt_option1, #bt_option2, #bt_option3, " +
+    ".rw_btn, .rw_option, .b_cards[iscorrectoption], .b_Cards[iscorrectoption], .b_ans"
   ));
 
   if (quizOptions.length > 0) {
@@ -619,7 +631,7 @@ function solveActiveTasks() {
 
   // 4. Detectar "This or That" (supersonic quiz)
   const totOptions = document.querySelectorAll(
-    "#rqAnswerOption0, #rqAnswerOption1, .btOptionCard, .rqOption"
+    "#rqAnswerOption0, #rqAnswerOption1, .btOptionCard, .rqOption, .wk_OptionClickClass, .b_cards[iscorrectoption]"
   );
   if (totOptions.length >= 2) {
     console.log("[RewardsBot] 'This or That' detectado.");
