@@ -12,6 +12,17 @@ if (isRewardsPage) {
   console.log("[RewardsBot] Cargado en página de Rewards.");
   // Esperar a que los Web Components de Microsoft se rendericen
   setTimeout(() => initRewardsPanel(), 2500);
+
+  // Detectar navegación SPA (Single Page Application)
+  let lastUrl = location.href;
+  new MutationObserver(() => {
+    const url = location.href;
+    if (url !== lastUrl) {
+      lastUrl = url;
+      console.log("[RewardsBot] Navegación SPA detectada. URL cambió a:", url);
+      setTimeout(() => initRewardsPanel(), 2000);
+    }
+  }).observe(document, { subtree: true, childList: true });
 }
 
 // --- BING SEARCH QUIZ/POLL AUTO-SOLVER & HUMANIZATION ---
