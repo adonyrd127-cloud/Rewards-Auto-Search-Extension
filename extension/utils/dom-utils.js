@@ -86,6 +86,10 @@ window.RewardsUtils.DOM = (function () {
    * @returns {Element[]} Lista (sin duplicados) de elementos encontrados.
    */
   function deepQueryAll(root, selectors) {
+    if (typeof selectors === 'string') {
+      selectors = [selectors];
+    }
+    
     /** @type {Set<Element>} Evita duplicados cuando un elemento aparece en varios niveles */
     const found = new Set();
 
@@ -141,6 +145,10 @@ window.RewardsUtils.DOM = (function () {
    * @returns {Element|null} El primer elemento encontrado o null.
    */
   function deepQueryOne(root, selectors) {
+    if (typeof selectors === 'string') {
+      selectors = [selectors];
+    }
+    
     /** @type {Element|null} */
     let result = null;
 
