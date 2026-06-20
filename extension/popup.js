@@ -22,21 +22,25 @@ const globalStatus = document.getElementById('global-status');
 
 // Launcher Elements
 const btnLaunchDesktop = document.getElementById('launch-desktop');
+const btnLaunchMobile = document.getElementById('launch-mobile');
 const btnLaunchEdge = document.getElementById('launch-edge');
 const btnLaunchAll = document.getElementById('launch-all');
 const btnLaunchDailyTasks = document.getElementById('launch-daily-tasks');
 const lblDesktopCount = document.getElementById('lbl-desktop-count');
+const lblMobileCount = document.getElementById('lbl-mobile-count');
 const lblEdgeCount = document.getElementById('lbl-edge-count');
 
 // Settings Form Elements
 const settingsForm = document.getElementById('settings-form');
 const setDesktopSearches = document.getElementById('set-desktop-searches');
+const setMobileSearches = document.getElementById('set-mobile-searches');
 const setEdgeSearches = document.getElementById('set-edge-searches');
 const setMinDelay = document.getElementById('set-min-delay');
 const setMaxDelay = document.getElementById('set-max-delay');
 const setEnableRandomDelay = document.getElementById('set-enable-random-delay');
 const setCooldown = document.getElementById('set-cooldown');
 const setAutoClose = document.getElementById('set-auto-close');
+const setWebhookUrl = document.getElementById('set-webhook-url');
 const querySourceRadios = document.getElementsByName('querySource');
 const customQueriesArea = document.getElementById('custom-queries-area');
 const setCustomQueries = document.getElementById('set-custom-queries');
@@ -138,12 +142,14 @@ async function loadAllData() {
   // Pre-populate settings form
   if (settings) {
     setDesktopSearches.value = settings.desktopSearches ?? 30;
+    setMobileSearches.value = settings.mobileSearches ?? 20;
     setEdgeSearches.value = settings.edgeSearches ?? 20;
     setMinDelay.value = settings.minDelay ?? 6;
     setMaxDelay.value = settings.maxDelay ?? 15;
     setEnableRandomDelay.checked = settings.enableRandomDelay ?? true;
     setCooldown.value = settings.cooldownBetweenSearches ?? 2;
     setAutoClose.checked = settings.autoCloseTabs ?? true;
+    if (setWebhookUrl) setWebhookUrl.value = settings.webhookUrl || '';
     
     // Label display counts on launcher
     if (stats.pcSearch && stats.pcSearch.max > 0) {
@@ -152,6 +158,13 @@ async function loadAllData() {
       lblDesktopCount.innerText = `${settings.desktopSearches ?? 30} búsquedas`;
     }
 
+    if (lblMobileCount) {
+      if (stats.mobileSearch && stats.mobileSearch.max > 0) {
+        lblMobileCount.innerText = `${stats.mobileSearch.current}/${stats.mobileSearch.max} pts (${Math.round(stats.mobileSearch.current/3)}/${Math.round(stats.mobileSearch.max/3)} búsquedas)`;
+      } else {
+        lblMobileCount.innerText = `${settings.mobileSearches ?? 20} búsquedas`;
+      }
+    }
 
     if (stats.edgeSearch && stats.edgeSearch.max > 0) {
       lblEdgeCount.innerText = `${stats.edgeSearch.current}/${stats.edgeSearch.max} pts (${Math.round(stats.edgeSearch.current/3)}/${Math.round(stats.edgeSearch.max/3)} búsquedas)`;
@@ -240,6 +253,7 @@ function updateDashboardState(session) {
     
     // Enable launchers
     btnLaunchDesktop.disabled = false;
+    if (btnLaunchMobile) btnLaunchMobile.disabled = false;
     btnLaunchEdge.disabled = false;
     btnLaunchAll.disabled = false;
     return;
@@ -248,7 +262,7 @@ function updateDashboardState(session) {
   // Active running/paused state
   activeSessionContainer.classList.remove('idle');
   
-  let translatedMode = session.mode === 'desktop' ? 'Escritorio' : 'Edge';
+  let translatedMode = session.mode === 'desktop' ? 'Escritorio' : (session.mode === 'mobile' ? 'Móvil' : 'Edge');
   sessionModeBadge.innerText = translatedMode;
   sessionModeBadge.className = `badge running`;
   
@@ -277,6 +291,7 @@ function updateDashboardState(session) {
 
   // Disable launchers
   btnLaunchDesktop.disabled = true;
+  if (btnLaunchMobile) btnLaunchMobile.disabled = true;
   btnLaunchEdge.disabled = true;
   btnLaunchAll.disabled = true;
 }
@@ -285,6 +300,7 @@ function updateDashboardState(session) {
 function setupActionListeners() {
   // Launchers
   btnLaunchDesktop.addEventListener('click', () => triggerLaunch('desktop'));
+  if (btnLaunchMobile) btnLaunchMobile.addEventListener('click', () => triggerLaunch('mobile'));
   btnLaunchEdge.addEventListener('click', () => triggerLaunch('edge'));
   
   btnLaunchAll.addEventListener('click', async () => {
@@ -293,9 +309,11 @@ function setupActionListeners() {
     
     const queue = [];
     const desktopSearches = settings.desktopSearches ?? 30;
+    const mobileSearches = settings.mobileSearches ?? 20;
     const edgeSearches = settings.edgeSearches ?? 20;
     
     if (edgeSearches > 0) queue.push('edge');
+    if (mobileSearches > 0) queue.unshift('mobile'); // Ensure queue is mobile -> edge
     
     if (desktopSearches > 0) {
       triggerLaunch('desktop', queue);
@@ -347,12 +365,14 @@ function setupActionListeners() {
     
     const updatedSettings = {
       desktopSearches: parseInt(setDesktopSearches.value) || 0,
+      mobileSearches: parseInt(setMobileSearches.value) || 0,
       edgeSearches: parseInt(setEdgeSearches.value) || 0,
       minDelay: parseInt(setMinDelay.value) || 6,
       maxDelay: parseInt(setMaxDelay.value) || 15,
       enableRandomDelay: setEnableRandomDelay.checked,
-      cooldownBetweenSearches: parseInt(setCooldown.value) || 0,
+      cooldownBetweenSearches: parseInt(setCooldown.value) || 2,
       autoCloseTabs: setAutoClose.checked,
+      webhookUrl: setWebhookUrl ? setWebhookUrl.value.trim() : '',
       querySource,
       customQueries: setCustomQueries.value
     };

@@ -1,15 +1,20 @@
-# Rewards Auto Search & Claimer v2.0
+# Rewards Auto Search & Claimer v3.0
 
 ![Icon](./extension/icons/icon-128.png)
 
-Una poderosa extensión para navegador que automatiza la recolección **completa** de puntos en Microsoft Rewards. Incluye sistema modular de workers, simulación humana avanzada, y cobertura de todas las actividades disponibles.
+Una poderosa extensión para navegador que automatiza la recolección **completa** de puntos en Microsoft Rewards. Incluye sistema modular de workers, simulación humana avanzada, soporte para búsquedas móviles, y notificaciones por Webhooks.
 
-## ✨ Características v2.0
+## ✨ Características v3.0
 
 ### 🔍 Búsquedas Automatizadas
-* **Escritura humanizada**: Escribe físicamente letra por letra en la barra de búsqueda de Bing con intervalos aleatorios
-* **Spoofing de User-Agent**: Simula Microsoft Edge para reclamar el bono exclusivo
-* **Búsquedas de Escritorio + Edge**: Automatiza ambos tipos de búsqueda secuencialmente
+* **Escritura y lectura humanizada**: Escribe físicamente letra por letra en la barra de búsqueda de Bing con intervalos aleatorios, hace scroll suave, y pausas aleatorias de lectura.
+* **Spoofing de User-Agent**: Simula Microsoft Edge y dispositivos móviles de forma nativa.
+* **Secuencia Completa**: Automatiza búsquedas de **Escritorio -> Móvil -> Edge** secuencialmente.
+
+### 🔔 Notificaciones y Resiliencia
+* **Webhooks (Discord/Telegram)**: Recibe notificaciones en tu servidor cuando los ciclos de búsqueda inicien, finalicen o fallen.
+* **Jitter de Horarios**: Añade tiempos aleatorios (±30 mins) a la programación diaria para evadir detección de bots.
+* **Auto-recovery**: Reintenta automáticamente (con retroceso exponencial) si Microsoft Rewards falla la carga de datos.
 
 ### 🎯 Workers Modulares de Tareas
 | Worker | Descripción | Puntos Potenciales |

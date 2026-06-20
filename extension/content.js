@@ -14,10 +14,19 @@ if (isRewardsPage) {
   setTimeout(() => initRewardsPanel(), 2500);
 }
 
-// --- BING SEARCH QUIZ/POLL AUTO-SOLVER ---
+// --- BING SEARCH QUIZ/POLL AUTO-SOLVER & HUMANIZATION ---
 if (isSearchPage) {
-  console.log("[RewardsBot] Cargado en Bing Search. Verificando quizzes/polls...");
+  console.log("[RewardsBot] Cargado en Bing Search. Verificando quizzes/polls y simulando lectura...");
   setTimeout(solveActiveTasks, 2500);
+  
+  // Simular lectura aleatoria para parecer más humano (solo 50% de las veces)
+  if (Math.random() > 0.5) {
+    setTimeout(() => {
+      if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateReading) {
+        window.RewardsUtils.Human.simulateReading();
+      }
+    }, 1500);
+  }
 }
 
 // ============================================================

@@ -55,13 +55,35 @@ window.RewardsUtils.Human = (function () {
   }
 
   /**
+   * scrollIntoViewIfNeeded — Scrolls the page so the element is visible, with human-like smooth scrolling.
+   */
+  async function scrollIntoViewIfNeeded(element) {
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    const isVisible = (
+      rect.top >= 0 &&
+      rect.left >= 0 &&
+      rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+      rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+    );
+
+    if (!isVisible) {
+      // Calcular cuánto hay que hacer scroll (con un poco de margen)
+      const scrollY = rect.top - (window.innerHeight / 3);
+      await scroll(scrollY);
+      await delay(300, 800); // Pausa tras hacer scroll antes de interactuar
+    }
+  }
+
+  /**
    * click — Simula un clic humano realista con la secuencia completa de eventos del mouse.
    *
    * Secuencia de eventos (igual que un clic real del navegador):
-   *   1. mouseover  — el cursor entra en el elemento
-   *   2. mousedown  — se presiona el botón del mouse
-   *   3. mouseup    — se suelta el botón del mouse
-   *   4. click      — evento de clic sintético
+   *   1. scroll     — se asegura de que el elemento esté visible (si es necesario)
+   *   2. mouseover  — el cursor entra en el elemento
+   *   3. mousedown  — se presiona el botón del mouse
+   *   4. mouseup    — se suelta el botón del mouse
+   *   5. click      — evento de clic sintético
    *
    * Cada evento tiene un pequeño delay aleatorio entre sí (10-50ms)
    * para simular el tiempo real de un clic humano.
@@ -74,6 +96,9 @@ window.RewardsUtils.Human = (function () {
       console.warn('[RewardsUtils.Human] click: elemento no proporcionado');
       return;
     }
+
+    // 1. Asegurarse de que el elemento está a la vista
+    await scrollIntoViewIfNeeded(element);
 
     // Calcular coordenadas aproximadas del centro del elemento
     // para que los eventos tengan posiciones creíbles
@@ -91,19 +116,19 @@ window.RewardsUtils.Human = (function () {
       button: 0, // Botón izquierdo
     };
 
-    // 1. mouseover — el cursor "llega" al elemento
+    // 2. mouseover — el cursor "llega" al elemento
     element.dispatchEvent(new MouseEvent('mouseover', baseOpts));
     await delay(10, 50);
 
-    // 2. mousedown — se presiona el botón
+    // 3. mousedown — se presiona el botón
     element.dispatchEvent(new MouseEvent('mousedown', baseOpts));
     await delay(10, 50);
 
-    // 3. mouseup — se suelta el botón
+    // 4. mouseup — se suelta el botón
     element.dispatchEvent(new MouseEvent('mouseup', baseOpts));
     await delay(10, 50);
 
-    // 4. click — evento final de clic
+    // 5. click — evento final de clic
     element.dispatchEvent(new MouseEvent('click', baseOpts));
   }
 
@@ -144,6 +169,27 @@ window.RewardsUtils.Human = (function () {
 
       step();
     });
+  }
+
+  /**
+   * simulateReading — Simula un humano leyendo una página.
+   * Hace scrolls pequeños y pausas largas.
+   */
+  async function simulateReading(minDurationMs = 3000, maxDurationMs = 7000) {
+    const totalTime = randomInt(minDurationMs, maxDurationMs);
+    const endTime = Date.now() + totalTime;
+
+    while (Date.now() < endTime) {
+      // Decidir si hacer scroll o solo esperar
+      if (Math.random() > 0.4) {
+        // Scroll corto aleatorio
+        const scrollAmount = randomInt(100, 400) * (Math.random() > 0.3 ? 1 : -1);
+        await scroll(scrollAmount);
+      }
+      
+      // Pausa de lectura
+      await delay(800, 2500);
+    }
   }
 
   /**
@@ -295,6 +341,8 @@ window.RewardsUtils.Human = (function () {
     delay,
     click,
     scroll,
+    scrollIntoViewIfNeeded,
+    simulateReading,
     typeIntoInput,
     submitSearch,
     jitterMs,

@@ -3,11 +3,13 @@ importScripts('words.js');
 
 // Constants
 const EDGE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.69";
+const MOBILE_UA = "Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36";
 const BING_SEARCH_URL = "https://www.bing.com/search?q=";
 
 // Default configuration
 const DEFAULT_SETTINGS = {
   desktopSearches: 30,
+  mobileSearches: 20,
   edgeSearches: 20,
   minDelay: 6, // seconds
   maxDelay: 15, // seconds
@@ -25,7 +27,7 @@ const DEFAULT_SETTINGS = {
 // Default session state
 const DEFAULT_SESSION = {
   status: "idle", // "idle", "running", "paused", "stopped", "completed"
-  mode: null, // "desktop", "edge"
+  mode: null, // "desktop", "mobile", "edge"
   totalSearches: 0,
   completedSearches: 0,
   pointsEarned: 0,
@@ -226,6 +228,12 @@ async function setUserAgentRule(mode) {
       { header: "Sec-CH-UA-Platform", operation: "set", value: "\"Windows\"" },
       { header: "Sec-CH-UA", operation: "set", value: "\"Not)A;Brand\";v=\"99\", \"Microsoft Edge\";v=\"116\", \"Chromium\";v=\"116\"" }
     ];
+  } else if (mode === "mobile") {
+    requestHeaders = [
+      { header: "User-Agent", operation: "set", value: MOBILE_UA },
+      { header: "Sec-CH-UA-Mobile", operation: "set", value: "?1" },
+      { header: "Sec-CH-UA-Platform", operation: "set", value: "\"Android\"" }
+    ];
   }
 
   console.log(`UA Rule: Setting UA spoofing rule for ${mode} mode`);
@@ -289,6 +297,9 @@ async function startSearchSession(mode, queue = []) {
     } else if (mode === "edge") {
       currentPoints = stats.edgeSearch.current;
       maxPoints = stats.edgeSearch.max;
+    } else if (mode === "mobile") {
+      currentPoints = stats.mobileSearch.current;
+      maxPoints = stats.mobileSearch.max;
     }
 
     if (maxPoints > 0 && currentPoints >= maxPoints) {
@@ -312,8 +323,7 @@ async function startSearchSession(mode, queue = []) {
   }
 
   // Determine search count
-  let count = settings.desktopSearches;
-  if (mode === "edge") count = settings.edgeSearches;
+  let count = mode === "desktop" ? settings.desktopSearches : (mode === "mobile" ? settings.mobileSearches : settings.edgeSearches);
 
   const queries = generateQueries(settings.querySource, count, settings.customQueries);
   
@@ -328,6 +338,8 @@ async function startSearchSession(mode, queue = []) {
     tabId: null,
     modesQueue: queue
   };
+
+  await sendWebhookNotification(`▶️ Iniciando búsquedas en modo **${mode.toUpperCase()}** (${newSession.totalSearches} búsquedas). Queue restante: ${queue.length > 0 ? queue.join(", ") : "Ninguna"}`);
 
   await chrome.storage.local.set({ session: newSession });
   notifyPopup();
@@ -512,6 +524,9 @@ async function runSessionLoop(session) {
           session: DEFAULT_SESSION
         });
         notifyPopup();
+        // Reprogramar la próxima ejecución (para aplicar nuevo jitter al día siguiente)
+        updateScheduleAlarm();
+        await sendWebhookNotification(`✅ Todos los modos de búsqueda han finalizado correctamente.`);
       }
     } else if (session && session.status === "stopped") {
       // Clean up tab
@@ -526,6 +541,7 @@ async function runSessionLoop(session) {
       await updateStatsAndHistory(session);
       await chrome.storage.local.set({ session: DEFAULT_SESSION });
       notifyPopup();
+      await sendWebhookNotification(`🛑 Sesión detenida por el usuario o debido a un error.`);
     }
 
   } catch (error) {
@@ -620,6 +636,31 @@ async function updateStatsAndHistory(session) {
   });
 }
 
+// Enviar notificación a Discord/Telegram vía Webhook
+async function sendWebhookNotification(message) {
+  const storage = await chrome.storage.local.get("settings");
+  const settings = storage.settings || DEFAULT_SETTINGS;
+  const webhookUrl = settings.webhookUrl;
+
+  if (!webhookUrl) return;
+
+  try {
+    const payload = {
+      content: `🤖 **Rewards Auto Search**: ${message}`
+    };
+
+    // Formato básico para Discord. Podría adaptarse para Telegram detectando "api.telegram.org"
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    console.log("Webhook enviado exitosamente.");
+  } catch (error) {
+    console.error("Error al enviar webhook:", error);
+  }
+}
+
 // Schedule alarm update
 async function updateScheduleAlarm() {
   const storage = await chrome.storage.local.get("settings");
@@ -638,6 +679,12 @@ async function updateScheduleAlarm() {
   const nextRun = new Date();
   nextRun.setHours(hours, minutes, 0, 0);
 
+  // Añadir variación aleatoria (jitter) de hasta ±30 minutos para evitar patrones detectables
+  if (settings.enableRandomDelay) {
+    const jitterMinutes = Math.floor(Math.random() * 61) - 30; // -30 a +30
+    nextRun.setMinutes(nextRun.getMinutes() + jitterMinutes);
+  }
+
   // If time is in the past today, schedule for tomorrow
   if (nextRun.getTime() <= Date.now()) {
     nextRun.setDate(nextRun.getDate() + 1);
@@ -647,8 +694,9 @@ async function updateScheduleAlarm() {
 
   // Create alarm
   chrome.alarms.create("daily-rewards-run", {
-    when: nextRun.getTime(),
-    periodInMinutes: 1440 // Repeat every 24 hours
+    when: nextRun.getTime()
+    // Ya no usamos periodInMinutes fijo aquí para que cada día tenga un jitter diferente.
+    // updateScheduleAlarm será llamado nuevamente al finalizar las búsquedas o al reiniciar el navegador.
   });
 }
 
@@ -727,6 +775,7 @@ async function triggerScheduledRun() {
   
   // Build queue of enabled search modes
   const queue = [];
+  if (settings.mobileSearches > 0) queue.push("mobile");
   if (settings.edgeSearches > 0) queue.push("edge");
   
   // Start with desktop if configured
@@ -746,24 +795,29 @@ function notifyPopup() {
 
 // Fetch user stats directly from Microsoft Rewards internal API
 async function syncUserInfo() {
-  try {
-    const res = await fetch("https://rewards.bing.com/api/getuserinfo", {
-      credentials: "include",
-      redirect: "manual" // Evitar seguir el redireccionamiento al login si no hay sesión
-    });
-    
-    if (res.type === "opaqueredirect" || !res.ok) {
-      console.log("Rewards API: Not logged in or fetch failed.");
-      return null;
-    }
-    const data = await res.json();
-    if (!data.userStatus) {
-      console.log("Rewards API: No userStatus in response.");
-      return null;
-    }
-
-    const userStatus = data.userStatus;
-    const counters = userStatus.counters || {};
+  let retries = 3;
+  let delay = 2000;
+  
+  while (retries > 0) {
+    try {
+      const res = await fetch("https://rewards.bing.com/api/getuserinfo", {
+        credentials: "include",
+        redirect: "manual" // Evitar seguir el redireccionamiento al login si no hay sesión
+      });
+      
+      if (res.type === "opaqueredirect" || !res.ok) {
+        console.log("Rewards API: Not logged in or fetch failed.");
+        return null;
+      }
+      const data = await res.json();
+      if (!data.userStatus) {
+        console.log("Rewards API: No userStatus in response.");
+        return null;
+      }
+      
+      // Si llegamos aquí, la respuesta fue exitosa
+      const userStatus = data.userStatus;
+      const counters = userStatus.counters || {};
 
     // Standard PC Search
     let pcCurrent = 0, pcMax = 0;
@@ -782,20 +836,33 @@ async function syncUserInfo() {
       edgeMax = counters.edgeSearch[0].pointProgressMax || 0;
     }
 
+    // Mobile Search
+    let mobileCurrent = 0, mobileMax = 0;
+    if (counters.mobileSearch && counters.mobileSearch[0]) {
+      mobileCurrent = counters.mobileSearch[0].pointProgress || 0;
+      mobileMax = counters.mobileSearch[0].pointProgressMax || 0;
+    }
+
     const stats = {
       todayPoints: userStatus.todayPoints || 0,
       totalPoints: userStatus.availablePoints || 0,
       streak: userStatus.streakInfo?.activityStreak || 0,
       lastUpdatedDate: new Date().toISOString().split("T")[0],
       pcSearch: { current: pcCurrent, max: pcMax },
-      edgeSearch: { current: edgeCurrent, max: edgeMax }
+      edgeSearch: { current: edgeCurrent, max: edgeMax },
+      mobileSearch: { current: mobileCurrent, max: mobileMax }
     };
 
     await chrome.storage.local.set({ stats });
     console.log("Rewards API: Synced real stats:", stats);
     return stats;
   } catch (e) {
-    console.error("Rewards API: Error in syncUserInfo:", e);
-    return null;
+      console.error(`Rewards API: Error in syncUserInfo (Retries left: ${retries - 1}):`, e);
+      retries--;
+      if (retries === 0) return null;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      delay *= 2; // Exponential backoff
+    }
   }
+  return null;
 }
