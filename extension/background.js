@@ -296,19 +296,24 @@ async function startSearchSession(mode, queue = []) {
     throw new Error("A search session is already active.");
   }
 
-  // Check if today's searches for this mode are already completed via Microsoft Rewards API
-  const stats = await syncUserInfo();
+  // Check if today's searches for this mode are already completed
+  let stats = await syncUserInfo();
+  if (!stats) {
+    const s = await chrome.storage.local.get("stats");
+    stats = s.stats;
+  }
+  
+  let currentPoints = 0, maxPoints = 0;
   if (stats) {
-    let currentPoints = 0, maxPoints = 0;
-    if (mode === "desktop") {
-      currentPoints = stats.pcSearch.current;
-      maxPoints = stats.pcSearch.max;
-    } else if (mode === "edge") {
-      currentPoints = stats.edgeSearch.current;
-      maxPoints = stats.edgeSearch.max;
-    } else if (mode === "mobile") {
-      currentPoints = stats.mobileSearch.current;
-      maxPoints = stats.mobileSearch.max;
+    if (mode === "desktop" && stats.pcSearch) {
+      currentPoints = stats.pcSearch.current || 0;
+      maxPoints = stats.pcSearch.max || 0;
+    } else if (mode === "edge" && stats.edgeSearch) {
+      currentPoints = stats.edgeSearch.current || 0;
+      maxPoints = stats.edgeSearch.max || 0;
+    } else if (mode === "mobile" && stats.mobileSearch) {
+      currentPoints = stats.mobileSearch.current || 0;
+      maxPoints = stats.mobileSearch.max || 0;
     }
 
     if (maxPoints === 0 || currentPoints >= maxPoints) {
@@ -333,6 +338,16 @@ async function startSearchSession(mode, queue = []) {
 
   // Determine search count
   let count = mode === "desktop" ? settings.desktopSearches : (mode === "mobile" ? settings.mobileSearches : settings.edgeSearches);
+  
+  // Calculate exact remaining searches based on stats
+  if (stats && maxPoints > 0) {
+    const remainingPoints = maxPoints - currentPoints;
+    const searchesNeeded = Math.ceil(remainingPoints / 3);
+    // Don't do more searches than what's needed to max out
+    if (searchesNeeded > 0 && searchesNeeded < count) {
+      count = searchesNeeded;
+    }
+  }
 
   const queries = generateQueries(settings.querySource, count, settings.customQueries);
   
