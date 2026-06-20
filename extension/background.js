@@ -63,6 +63,8 @@ chrome.runtime.onInstalled.addListener(async () => {
 
   // Set up daily check alarm
   chrome.alarms.create("check-schedule", { periodInMinutes: 1 });
+  // Recordatorio nocturno a las 10 PM (verifica cada 30 min)
+  chrome.alarms.create("daily-tasks-reminder", { periodInMinutes: 30 });
   updateScheduleAlarm();
 });
 
@@ -119,6 +121,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
+
+  // Abrir la página de Rewards y dejar que el content script haga su trabajo
+  if (message.action === "runDailyTasks") {
+    openRewardsDashboard()
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  // Notificación cuando se completan las tareas
+  if (message.action === "tasksClaimed") {
+    const count = message.count || 0;
+    showNotification(
+      "¡Tareas Completadas!",
+      `Se procesaron ${count} tarea(s) de Microsoft Rewards.`
+    );
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // Alarm Listener for scheduling
@@ -129,8 +150,59 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   } else if (alarm.name === "check-schedule") {
     // Fallback scheduler verification
     checkAndTriggerSchedule();
+  } else if (alarm.name === "daily-tasks-reminder") {
+    // Recordatorio de las 10 PM si no se han completado las tareas
+    checkDailyTasksReminder();
   }
 });
+
+// Abrir el dashboard de Rewards para que los content scripts trabajen
+async function openRewardsDashboard() {
+  // Verificar si ya hay una pestaña de rewards abierta
+  const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
+  if (tabs.length > 0) {
+    // Activar la pestaña existente y recargarla
+    await chrome.tabs.update(tabs[0].id, { active: true });
+    await chrome.tabs.reload(tabs[0].id);
+  } else {
+    // Abrir nueva pestaña
+    await chrome.tabs.create({ url: "https://rewards.bing.com/earn", active: true });
+  }
+}
+
+// Mostrar notificación nativa del navegador
+function showNotification(title, message) {
+  try {
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: "icons/icon-128.png",
+      title: title,
+      message: message,
+      priority: 2
+    });
+  } catch (e) {
+    console.warn("No se pudo mostrar notificación:", e);
+  }
+}
+
+// Recordatorio de tareas diarias a las 10 PM
+async function checkDailyTasksReminder() {
+  const now = new Date();
+  if (now.getHours() >= 22) {
+    // Verificar si hay tareas pendientes
+    const stats = await syncUserInfo();
+    if (stats) {
+      const pcDone = stats.pcSearch.max > 0 && stats.pcSearch.current >= stats.pcSearch.max;
+      const edgeDone = stats.edgeSearch.max > 0 && stats.edgeSearch.current >= stats.edgeSearch.max;
+      if (!pcDone || !edgeDone) {
+        showNotification(
+          "⚠️ Tareas Pendientes",
+          "Aún tienes búsquedas de Rewards sin completar hoy. ¡No pierdas tu racha!"
+        );
+      }
+    }
+  }
+}
 
 // Spoof User-Agent header using declarativeNetRequest
 async function setUserAgentRule(mode) {
@@ -636,6 +708,22 @@ async function triggerScheduledRun() {
   }
 
   console.log("Triggering automated sequence...");
+
+  // PASO 1: Abrir el dashboard de Rewards para que los content scripts 
+  // reclamen las tareas diarias (Daily Set, More Activities, etc.)
+  try {
+    console.log("Paso 1: Abriendo dashboard de Rewards para tareas diarias...");
+    await openRewardsDashboard();
+    // Dar tiempo suficiente para que los content scripts escaneen y reclamen
+    // (El panel se encarga de todo automáticamente)
+    await new Promise(resolve => setTimeout(resolve, 30000));
+    console.log("Paso 1 completado: Dashboard de Rewards procesado.");
+  } catch (e) {
+    console.warn("Error abriendo dashboard de Rewards:", e);
+  }
+
+  // PASO 2: Ejecutar búsquedas automatizadas
+  console.log("Paso 2: Iniciando búsquedas automatizadas...");
   
   // Build queue of enabled search modes
   const queue = [];

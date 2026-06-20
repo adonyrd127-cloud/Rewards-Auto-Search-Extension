@@ -24,6 +24,7 @@ const globalStatus = document.getElementById('global-status');
 const btnLaunchDesktop = document.getElementById('launch-desktop');
 const btnLaunchEdge = document.getElementById('launch-edge');
 const btnLaunchAll = document.getElementById('launch-all');
+const btnLaunchDailyTasks = document.getElementById('launch-daily-tasks');
 const lblDesktopCount = document.getElementById('lbl-desktop-count');
 const lblEdgeCount = document.getElementById('lbl-edge-count');
 
@@ -304,6 +305,25 @@ function setupActionListeners() {
       showToast("¡Habilite las cantidades de búsqueda primero!", true);
     }
   });
+
+  // Daily Tasks Launcher
+  if (btnLaunchDailyTasks) {
+    btnLaunchDailyTasks.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ action: "runDailyTasks" }, (response) => {
+        if (response && response.success) {
+          showToast("Abriendo Rewards para reclamar tareas...");
+          btnLaunchDailyTasks.disabled = true;
+          btnLaunchDailyTasks.innerText = "⏳ Procesando...";
+          setTimeout(() => {
+            btnLaunchDailyTasks.disabled = false;
+            btnLaunchDailyTasks.innerText = "🎁 Abrir & Reclamar Tareas";
+          }, 35000);
+        } else {
+          showToast(response?.error || "Error al abrir Rewards", true);
+        }
+      });
+    });
+  }
 
   // Session Controls
   btnPauseResume.addEventListener('click', async () => {
