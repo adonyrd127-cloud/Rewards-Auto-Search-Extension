@@ -142,6 +142,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+
+  // Refrescar datos para el popup
+  if (message.action === "refreshData") {
+    syncUserInfo().then(stats => {
+      chrome.runtime.sendMessage({ action: "sessionUpdate" }).catch(() => {});
+    });
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // Alarm Listener for scheduling
@@ -302,8 +311,8 @@ async function startSearchSession(mode, queue = []) {
       maxPoints = stats.mobileSearch.max;
     }
 
-    if (maxPoints > 0 && currentPoints >= maxPoints) {
-      console.log(`Skipping ${mode} mode: searches are already completed today (${currentPoints}/${maxPoints} points).`);
+    if (maxPoints === 0 || currentPoints >= maxPoints) {
+      console.log(`Skipping ${mode} mode: searches are already completed today or not available (${currentPoints}/${maxPoints} points).`);
       
       // If there are other modes queued, chain to the next one
       if (queue && queue.length > 0) {
@@ -841,6 +850,14 @@ async function syncUserInfo() {
     if (counters.mobileSearch && counters.mobileSearch[0]) {
       mobileCurrent = counters.mobileSearch[0].pointProgress || 0;
       mobileMax = counters.mobileSearch[0].pointProgressMax || 0;
+    } else if (counters.mobileSearch && counters.mobileSearch.length > 0) {
+      // Some accounts use a different array index if there are multiple
+      mobileCurrent = counters.mobileSearch[counters.mobileSearch.length-1].pointProgress || 0;
+      mobileMax = counters.mobileSearch[counters.mobileSearch.length-1].pointProgressMax || 0;
+    } else if (!counters.mobileSearch && pcMax > 0 && pcMax <= 60) {
+      // In some regions or Level 1, there is no mobile search, only PC.
+      // So mobile search is effectively 0 max.
+      mobileMax = 0;
     }
 
     const stats = {
