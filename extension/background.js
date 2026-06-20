@@ -876,6 +876,32 @@ async function syncUserInfo() {
       const userStatus = data.userStatus;
       const counters = userStatus.counters || {};
 
+      // Intentar obtener el 'Puntos de hoy' real del DOM si hay una pestaña abierta
+      // porque la API getuserinfo a veces no cuenta todo lo que la interfaz sí cuenta.
+      let realTodayPoints = userStatus.todayPoints || 0;
+      try {
+        const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
+        if (tabs.length > 0) {
+          const domResult = await chrome.scripting.executeScript({
+            target: { tabId: tabs[0].id },
+            func: () => {
+              // Buscar en el DOM el elemento que muestra los puntos de hoy
+              const elem = document.querySelector('mee-rewards-counter-animation span');
+              if (elem && elem.innerText) {
+                 const pts = parseInt(elem.innerText.replace(/\\D/g, ''));
+                 if (!isNaN(pts)) return pts;
+              }
+              return null;
+            }
+          });
+          if (domResult && domResult[0] && domResult[0].result) {
+            realTodayPoints = domResult[0].result;
+          }
+        }
+      } catch (e) {
+        console.log("No se pudo obtener Puntos de hoy del DOM, usando valor de API.");
+      }
+
     // Standard PC Search
     let pcCurrent = 0, pcMax = 0;
     if (counters.pcSearch && counters.pcSearch[0]) {
@@ -909,9 +935,10 @@ async function syncUserInfo() {
     }
 
     const stats = {
-      todayPoints: userStatus.todayPoints || 0,
+      todayPoints: realTodayPoints,
       totalPoints: userStatus.availablePoints || 0,
       streak: userStatus.streakInfo?.activityStreak || 0,
+      level: userStatus.levelInfo?.activeLevel || "Nivel 1",
       lastUpdatedDate: new Date().toISOString().split("T")[0],
       pcSearch: { current: pcCurrent, max: pcMax },
       edgeSearch: { current: edgeCurrent, max: edgeMax },

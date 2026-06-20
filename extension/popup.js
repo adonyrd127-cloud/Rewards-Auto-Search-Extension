@@ -6,6 +6,7 @@ const tabContents = document.querySelectorAll('.tab-content');
 const statTodayPoints = document.getElementById('stat-today-points');
 const statStreak = document.getElementById('stat-streak');
 const statTotalPoints = document.getElementById('stat-total-points');
+const statLevel = document.getElementById('stat-level');
 
 // Session Panel Elements
 const activeSessionContainer = document.getElementById('active-session-container');
@@ -135,9 +136,14 @@ async function loadAllData() {
   const history = data.history || [];
 
   // Update Stats UI
+  let levelText = stats.level || "Nivel 1";
+  if (levelText.toLowerCase().includes("level2") || levelText === "Level 2") levelText = "Nivel 2";
+  else if (levelText.toLowerCase().includes("level1") || levelText === "Level 1") levelText = "Nivel 1";
+    
   statTodayPoints.innerText = stats.todayPoints || 0;
   statStreak.innerText = stats.streak || 0;
   statTotalPoints.innerText = stats.totalPoints || 0;
+  if (statLevel) statLevel.innerText = levelText;
 
   // Pre-populate settings form
   if (settings) {
