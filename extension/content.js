@@ -215,25 +215,25 @@ async function runFullScan(panel, globalStatus, claimAllBtn) {
     // Escanear cada categoría usando los workers disponibles
     try {
       if (window.RewardsWorkers && window.RewardsWorkers.DailySet) {
-        results.dailySet = window.RewardsWorkers.DailySet.scan();
+        results.dailySet = await window.RewardsWorkers.DailySet.scan();
       }
     } catch (e) { console.warn("[RewardsBot] Error escaneando Daily Set:", e); }
 
     try {
       if (window.RewardsWorkers && window.RewardsWorkers.MoreActivities) {
-        results.moreActivities = window.RewardsWorkers.MoreActivities.scan();
+        results.moreActivities = await window.RewardsWorkers.MoreActivities.scan();
       }
     } catch (e) { console.warn("[RewardsBot] Error escaneando More Activities:", e); }
 
     try {
       if (window.RewardsWorkers && window.RewardsWorkers.PunchCards) {
-        results.punchCards = window.RewardsWorkers.PunchCards.scan();
+        results.punchCards = await window.RewardsWorkers.PunchCards.scan();
       }
     } catch (e) { console.warn("[RewardsBot] Error escaneando Punch Cards:", e); }
 
     try {
       if (window.RewardsWorkers && window.RewardsWorkers.StreakBonus) {
-        results.streakBonus = window.RewardsWorkers.StreakBonus.scan();
+        results.streakBonus = await window.RewardsWorkers.StreakBonus.scan();
       }
     } catch (e) { console.warn("[RewardsBot] Error escaneando Streak Bonus:", e); }
 
