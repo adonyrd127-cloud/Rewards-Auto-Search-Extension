@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rewards Auto Search & Claimer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Dashboard Main Container -->
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="logo-icon-wrapper">
+          <svg class="logo-svg" viewBox="0 0 24 24" width="24" height="24">
+            <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" fill="#10b981"/>
+            <path d="M12 17l-5 4 1.5-7-5-5 7-.5L12 2l3 6.5 7 .5-5 5 1.5 7z" stroke="#34d399" stroke-width="1" fill="none"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>Rewards<span class="text-glow">Auto</span></h1>
+          <span class="version">v1.0.0</span>
+        </div>
+      </div>
+      
+      <div class="status-badge" id="global-status">
+        <span class="status-dot green"></span>
+        <span class="status-label">Inactivo</span>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="dashboard">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <span>Panel</span>
+      </button>
+      <button class="tab-btn" data-tab="settings">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Ajustes</span>
+      </button>
+      <button class="tab-btn" data-tab="schedule">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>Horario</span>
+      </button>
+      <button class="tab-btn" data-tab="history">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Historial</span>
+      </button>
+    </nav>
+
+    <!-- Content Sections -->
+    <main class="app-content">
+      
+      <!-- Tab 1: Dashboard -->
+      <section id="tab-dashboard" class="tab-content active">
+        <!-- Stats Row -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-title">Puntos de hoy</span>
+            <div class="stat-value-row">
+              <span class="stat-value" id="stat-today-points">0</span>
+              <span class="points-badge">+3 pts/búsqueda</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-title">Racha</span>
+            <div class="stat-value-row">
+              <span class="stat-value" id="stat-streak">0</span>
+              <span class="streak-icon">🔥</span>
+            </div>
+          </div>
+          <div class="stat-card full-width">
+            <span class="stat-title">Puntos Totales Obtenidos</span>
+            <span class="stat-value text-green" id="stat-total-points">0</span>
+          </div>
+        </div>
+
+        <!-- Active Session Panel -->
+        <div class="active-session-panel" id="active-session-container">
+          <div class="panel-header">
+            <span class="panel-title">Automatización Activa</span>
+            <span class="badge" id="session-mode-badge">Escritorio</span>
+          </div>
+          
+          <div class="progress-bar-container">
+            <div class="progress-info">
+              <span id="session-progress-text">0 / 30 Búsquedas</span>
+              <span id="session-percentage">0%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="session-progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <div class="session-details">
+            <div class="detail-item">
+              <span class="detail-label">Búsqueda Actual:</span>
+              <span class="detail-val" id="session-current-query">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Puntos Estimados:</span>
+              <span class="detail-val text-green" id="session-estimated-points">+0 pts</span>
+            </div>
+          </div>
+
+          <div class="session-controls">
+            <button class="control-btn play-btn" id="btn-pause-resume" disabled>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              <span id="btn-pause-text">Pausar</span>
+            </button>
+            <button class="control-btn stop-btn" id="btn-stop" disabled>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 6h12v12H6V6z"/></svg>
+              <span>Detener</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Start Launcher -->
+        <div class="launcher-panel">
+          <h3>Inicio Rápido</h3>
+          <div class="launcher-grid">
+            <button class="launcher-btn" id="launch-desktop">
+              <span class="launcher-icon">💻</span>
+              <span class="launcher-label">Escritorio</span>
+              <span class="launcher-sub" id="lbl-desktop-count">30 búsquedas</span>
+            </button>
+            <button class="launcher-btn" id="launch-edge">
+              <span class="launcher-icon">🌐</span>
+              <span class="launcher-label">Edge</span>
+              <span class="launcher-sub" id="lbl-edge-count">20 búsquedas</span>
+            </button>
+          </div>
+          <button class="btn btn-primary full-width mt-3" id="launch-all">
+            🚀 Ejecutar Todos
+          </button>
+          
+          <!-- Rewards Direct Link -->
+          <div class="text-center mt-3">
+            <a href="https://rewards.bing.com" target="_blank" class="text-link">
+              Abrir Microsoft Rewards &nearr;
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 2: Settings -->
+      <section id="tab-settings" class="tab-content">
+        <form id="settings-form">
+          <div class="form-group">
+            <h3>Cantidad de Búsquedas</h3>
+            <div class="grid-col-2">
+              <div>
+                <label for="set-desktop-searches">Escritorio</label>
+                <input type="number" id="set-desktop-searches" min="0" max="100" required>
+              </div>
+              <div>
+                <label for="set-edge-searches">Edge</label>
+                <input type="number" id="set-edge-searches" min="0" max="100" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <h3>Tiempos de Espera (Segundos)</h3>
+            <div class="grid-col-2">
+              <div>
+                <label for="set-min-delay">Mínimo</label>
+                <input type="number" id="set-min-delay" min="1" max="60" required>
+              </div>
+              <div>
+                <label for="set-max-delay">Máximo</label>
+                <input type="number" id="set-max-delay" min="2" max="120" required>
+              </div>
+            </div>
+            <div class="flex-row justify-between mt-2">
+              <label for="set-enable-random-delay">Tiempos de Espera Aleatorios</label>
+              <label class="switch">
+                <input type="checkbox" id="set-enable-random-delay">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="mt-2">
+              <label for="set-cooldown">Tiempo base entre búsquedas (s)</label>
+              <input type="number" id="set-cooldown" min="0" max="30" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <h3>Opciones Generales</h3>
+            <div class="flex-row justify-between">
+              <label for="set-auto-close">Cerrar pestaña automáticamente al terminar</label>
+              <label class="switch">
+                <input type="checkbox" id="set-auto-close">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <h3>Origen de las Palabras</h3>
+            <div class="radio-group mb-2">
+              <label class="radio-label">
+                <input type="radio" name="querySource" value="random" checked>
+                <span>Palabras Aleatorias Integradas</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="querySource" value="custom">
+                <span>Palabras Personalizadas</span>
+              </label>
+            </div>
+            
+            <div id="custom-queries-area" style="display: none;">
+              <label for="set-custom-queries">Palabras (separadas por comas):</label>
+              <textarea id="set-custom-queries" rows="3" placeholder="palabra1, palabra2, palabra3..."></textarea>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary full-width mt-3">Guardar Ajustes</button>
+        </form>
+      </section>
+
+      <!-- Tab 3: Schedule -->
+      <section id="tab-schedule" class="tab-content">
+        <form id="schedule-form">
+          <div class="form-group">
+            <div class="flex-row justify-between mb-3">
+              <h3>Habilitar Búsqueda Diaria Auto.</h3>
+              <label class="switch">
+                <input type="checkbox" id="set-schedule-enabled">
+                <span class="slider"></span>
+              </label>
+            </div>
+            
+            <div id="schedule-config-area" style="display: none;">
+              <div class="mb-3">
+                <label for="set-schedule-time">Hora de Ejecución</label>
+                <input type="time" id="set-schedule-time" required>
+              </div>
+
+              <label class="mb-2 block">Días Activos</label>
+              <div class="days-selector">
+                <label class="day-chip"><input type="checkbox" value="Mon" checked><span>L</span></label>
+                <label class="day-chip"><input type="checkbox" value="Tue" checked><span>M</span></label>
+                <label class="day-chip"><input type="checkbox" value="Wed" checked><span>X</span></label>
+                <label class="day-chip"><input type="checkbox" value="Thu" checked><span>J</span></label>
+                <label class="day-chip"><input type="checkbox" value="Fri" checked><span>V</span></label>
+                <label class="day-chip"><input type="checkbox" value="Sat" checked><span>S</span></label>
+                <label class="day-chip"><input type="checkbox" value="Sun" checked><span>D</span></label>
+              </div>
+              <p class="schedule-helper">El navegador debe estar abierto a esta hora para ejecutarse. Si está cerrado, se ejecutará cuando lo abra.</p>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary full-width mt-3">Guardar Horario</button>
+        </form>
+      </section>
+
+      <!-- Tab 4: History -->
+      <section id="tab-history" class="tab-content">
+        <div class="history-header">
+          <h3>Sesiones Recientes</h3>
+          <button class="btn btn-secondary btn-sm" id="btn-clear-history">Borrar</button>
+        </div>
+        <div class="history-list-wrapper">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Modo</th>
+                <th>Búsquedas</th>
+                <th>Puntos</th>
+              </tr>
+            </thead>
+            <tbody id="history-rows">
+              <!-- Dynamically populated -->
+              <tr>
+                <td colspan="4" class="text-center text-muted py-4">Sin historial.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>Simulando búsquedas humanas. Úselo responsablemente.</p>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Rewards Auto Search & Claimer",
+  "version": "1.0.0",
+  "description": "Automates desktop, mobile, and Edge searches on Bing and auto-claims daily tasks on rewards.bing.com.",
+  "permissions": [
+    "storage",
+    "declarativeNetRequest",
+    "alarms",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.bing.com/*",
+    "*://*.microsoft.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://rewards.bing.com/*",
+        "*://*.bing.com/rewards/*",
+        "*://*.bing.com/search*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
