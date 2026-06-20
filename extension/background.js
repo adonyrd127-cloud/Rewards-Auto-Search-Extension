@@ -829,8 +829,11 @@ async function syncUserInfo() {
 
       // 1. Intentar desde background
       try {
-        const res = await fetch("https://rewards.bing.com/api/getuserinfo", { credentials: "include" });
-        if (res.ok) {
+        const res = await fetch("https://rewards.bing.com/api/getuserinfo", { 
+          credentials: "include",
+          redirect: "manual"
+        });
+        if (res.ok && res.type !== "opaqueredirect") {
           data = await res.json();
         }
       } catch (e) {
@@ -839,15 +842,21 @@ async function syncUserInfo() {
 
       // 2. Fallback inyectando script en una pestaña de Bing si el background falla
       if (!data || !data.userStatus) {
-        const tabs = await chrome.tabs.query({ url: "*://*.bing.com/*" });
+        const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
         if (tabs.length > 0) {
           try {
             const result = await chrome.scripting.executeScript({
               target: { tabId: tabs[0].id },
               func: async () => {
                 try {
-                  const r = await fetch("https://rewards.bing.com/api/getuserinfo", { credentials: "include" });
-                  return await r.json();
+                  const r = await fetch("https://rewards.bing.com/api/getuserinfo", { 
+                    credentials: "include",
+                    redirect: "manual"
+                  });
+                  if (r.ok && r.type !== "opaqueredirect") {
+                    return await r.json();
+                  }
+                  return null;
                 } catch (err) {
                   return null;
                 }
