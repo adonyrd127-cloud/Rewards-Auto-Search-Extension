@@ -824,19 +824,52 @@ async function syncUserInfo() {
   
   while (retries > 0) {
     try {
-      const res = await fetch("https://rewards.bing.com/api/getuserinfo", {
-        credentials: "include",
-        redirect: "manual" // Evitar seguir el redireccionamiento al login si no hay sesión
-      });
-      
-      if (res.type === "opaqueredirect" || !res.ok) {
-        console.log("Rewards API: Not logged in or fetch failed.");
+      let data = null;
+      let usedFallback = false;
+
+      // 1. Intentar desde background
+      try {
+        const res = await fetch("https://rewards.bing.com/api/getuserinfo", { credentials: "include" });
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (e) {
+        console.log("Rewards API: Background fetch failed, trying fallback.");
+      }
+
+      // 2. Fallback inyectando script en una pestaña de Bing si el background falla
+      if (!data || !data.userStatus) {
+        const tabs = await chrome.tabs.query({ url: "*://*.bing.com/*" });
+        if (tabs.length > 0) {
+          try {
+            const result = await chrome.scripting.executeScript({
+              target: { tabId: tabs[0].id },
+              func: async () => {
+                try {
+                  const r = await fetch("https://rewards.bing.com/api/getuserinfo", { credentials: "include" });
+                  return await r.json();
+                } catch (err) {
+                  return null;
+                }
+              }
+            });
+            if (result && result[0] && result[0].result) {
+              data = result[0].result;
+              usedFallback = true;
+            }
+          } catch (e) {
+            console.log("Rewards API: Content script fallback failed:", e);
+          }
+        }
+      }
+
+      if (!data || !data.userStatus) {
+        console.log("Rewards API: No userStatus in response after all attempts.");
         return null;
       }
-      const data = await res.json();
-      if (!data.userStatus) {
-        console.log("Rewards API: No userStatus in response.");
-        return null;
+      
+      if (usedFallback) {
+        console.log("Rewards API: Successfully fetched data using content script fallback.");
       }
       
       // Si llegamos aquí, la respuesta fue exitosa

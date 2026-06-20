@@ -161,6 +161,16 @@ async function loadAllData() {
     if (lblMobileCount) {
       if (stats.mobileSearch && stats.mobileSearch.max > 0) {
         lblMobileCount.innerText = `${stats.mobileSearch.current}/${stats.mobileSearch.max} pts (${Math.round(stats.mobileSearch.current/3)}/${Math.round(stats.mobileSearch.max/3)} búsquedas)`;
+        if (btnLaunchMobile && (!session || session.status === "idle" || session.status === "stopped")) {
+          btnLaunchMobile.disabled = false;
+          btnLaunchMobile.style.opacity = "1";
+        }
+      } else if (stats.lastUpdatedDate && stats.mobileSearch && stats.mobileSearch.max === 0) {
+        lblMobileCount.innerText = "No disponible (Nivel)";
+        if (btnLaunchMobile) {
+          btnLaunchMobile.disabled = true;
+          btnLaunchMobile.style.opacity = "0.5";
+        }
       } else {
         lblMobileCount.innerText = `${settings.mobileSearches ?? 20} búsquedas`;
       }
@@ -196,7 +206,7 @@ async function loadAllData() {
   renderHistory(history);
 
   // Initial dashboard sync
-  updateDashboardState(session);
+  updateDashboardState(session, stats);
 }
 
 // Render history rows
@@ -227,12 +237,12 @@ function renderHistory(history) {
 
 // Update dashboard states periodically
 async function updateDashboard() {
-  const data = await chrome.storage.local.get("session");
-  updateDashboardState(data.session);
+  const data = await chrome.storage.local.get(["session", "stats"]);
+  updateDashboardState(data.session, data.stats);
 }
 
 // Update dashboard state DOM
-function updateDashboardState(session) {
+function updateDashboardState(session, stats) {
   if (!session || session.status === "idle" || session.status === "completed" || session.status === "stopped") {
     // Idle state
     activeSessionContainer.classList.add('idle');
@@ -253,7 +263,13 @@ function updateDashboardState(session) {
     
     // Enable launchers
     btnLaunchDesktop.disabled = false;
-    if (btnLaunchMobile) btnLaunchMobile.disabled = false;
+    if (btnLaunchMobile) {
+      if (stats && stats.mobileSearch && stats.mobileSearch.max === 0) {
+        btnLaunchMobile.disabled = true;
+      } else {
+        btnLaunchMobile.disabled = false;
+      }
+    }
     btnLaunchEdge.disabled = false;
     btnLaunchAll.disabled = false;
     return;
