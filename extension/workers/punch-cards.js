@@ -162,79 +162,8 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    * @returns {Array<{title: string, points: string, currentStep: number, totalSteps: number, completed: boolean, element: Element, url: string}>}
    */
   async function scan() {
-    console.log(`${TAG} Iniciando escaneo de Punch Cards...`);
-
-    const section = _findPunchCardSection();
-
-    // Buscar tarjetas punch card dentro de la sección (o en todo el body)
-    const root = section || document.body;
-    const punchCards = _findPunchCardElements(root);
-
-    console.log(`${TAG} Punch Cards detectadas: ${punchCards.length}`);
-
-    const tasks = [];
-    const seenUrls = new Set();
-
-    for (const card of punchCards) {
-      try {
-        const fullText = DOM.getDeepText(card);
-        const progress = _extractProgress(fullText);
-
-        // Este filtro ya lo hicimos, pero verificamos por seguridad
-        if (!progress) continue;
-
-        // Buscar elemento clickeable
-        const clickable = DOM.findClickable(card);
-        const url = clickable
-          ? (clickable.href || clickable.getAttribute('data-href') || '')
-          : '';
-
-        // Deduplicar
-        if (url) {
-          const urlKey = url.split('?')[0];
-          if (seenUrls.has(urlKey)) continue;
-          seenUrls.add(urlKey);
-        }
-
-        // Detectar si la punch card está completamente terminada
-        const completed = progress.current >= progress.total ||
-          DOM.hasCompletionMark(card) ||
-          /\b(completad[oa]|finished|terminad[oa])\b/i.test(fullText);
-
-        // Extraer puntos
-        const points = _extractPoints(fullText);
-
-        // Construir título
-        let title = fullText
-          .replace(/\+\s*\d+/, '')
-          .replace(/\d+\s*[\/]\s*\d+/, '') // quitar indicador de progreso
-          .replace(/\d+\s+(?:of|de)\s+\d+/i, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-
-        if (title.length > 50) title = title.substring(0, 47) + '...';
-        if (!title || title.length < 2) {
-          title = (clickable && (clickable.title || clickable.getAttribute('aria-label'))) || 'Punch Card';
-        }
-
-        tasks.push({
-          title,
-          points,
-          currentStep: progress.current,
-          totalSteps: progress.total,
-          completed,
-          element: clickable || card,
-          url
-        });
-
-        console.log(`${TAG}   → ${completed ? '✅' : '🔲'} "${title}" — paso ${progress.current}/${progress.total} (${points})`);
-      } catch (err) {
-        console.error(`${TAG} Error procesando punch card:`, err);
-      }
-    }
-
-    console.log(`${TAG} Escaneo completado: ${tasks.length} punch cards (${tasks.filter(t => !t.completed).length} pendientes)`);
-    return tasks;
+    console.log(`${TAG} Escaneo delegado a daily-set.js (escaneo global React) para evitar duplicados.`);
+    return [];
   }
 
   /**

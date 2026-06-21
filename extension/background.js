@@ -983,7 +983,7 @@ async function syncUserInfo() {
           let stk = null;
           
           // Total Points / Available Points
-          const totalElems = document.querySelectorAll('mee-rewards-counter-animation span, [data-bi-id="points"], .points-value, [data-bi-id="available-points"]');
+          const totalElems = document.querySelectorAll('header .flex.items-center.gap-2 > p, [data-bi-id="points"], .points-value');
           for (let el of totalElems) {
             if (el && el.innerText) {
               const pts = parseInt(el.innerText.replace(/\D/g, ''));
@@ -994,7 +994,7 @@ async function syncUserInfo() {
             }
           }
 
-          // Today Points
+          // Today Points (usually not directly exposed in the new UI easily, fallback to empty or attempt parse)
           const todayElems = document.querySelectorAll('mee-rewards-user-status-item[data-bi-id="today-points"] .status-item-value');
           for (let el of todayElems) {
             if (el && el.innerText) {
@@ -1007,9 +1007,10 @@ async function syncUserInfo() {
           }
           
           // Streak
-          const stkElems = document.querySelectorAll('.streak-count, mee-rewards-daily-set-section .streak-count, [data-bi-id="streak"], mee-rewards-user-status-item[data-bi-id="streak"] .status-item-value');
+          // Look for buttons that contain the word "Racha" or legacy streak counters
+          const stkElems = document.querySelectorAll('button, .streak-count, [data-bi-id="streak"]');
           for (let el of stkElems) {
-            if (el && el.innerText) {
+            if (el && el.innerText && (el.innerText.toLowerCase().includes('racha') || el.classList.contains('streak-count'))) {
               const parsedStk = parseInt(el.innerText.replace(/\D/g, ''));
               if (!isNaN(parsedStk)) {
                 stk = parsedStk;

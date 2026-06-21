@@ -139,98 +139,70 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    * @returns {Array<{title: string, points: string, type: string, completed: boolean, element: Element, url: string}>}
    */
   async function scan() {
-    console.log(`${TAG} Iniciando escaneo de Daily Set...`);
+    console.log(`${TAG} Iniciando escaneo global de Tareas (React-Aria)...`);
 
-    const section = _findDailySetSection();
-    if (!section) {
-      console.log(`${TAG} Sección Daily Set no encontrada — devolviendo lista vacía`);
-      return [];
-    }
-
-    // Buscar tarjetas individuales dentro de la sección
-    const cardSelectors = [
-      'mee-rewards-daily-set-item',
-      'mee-card-group[data-bi-area="DailySet"] mee-card',
-      '.daily-set-card',
-      'mee-card[data-bi-area="DailySet"]'
-    ].join(', ');
-
-    let cards = DOM.deepQueryAll(section, cardSelectors);
-
-    // Filtrar tarjetas anidadas — conservar solo las más internas
-    cards = cards.filter(card =>
-      !cards.some(other => other !== card && card.contains(other))
-    );
-
-    console.log(`${TAG} Tarjetas encontradas en Daily Set: ${cards.length}`);
+    const cardSelectors = 'a.group\\/ctrl.cursor-pointer[href]';
+    let cards = document.querySelectorAll(cardSelectors);
+    console.log(`${TAG} Enlaces encontrados: ${cards.length}`);
 
     const tasks = [];
     const seenUrls = new Set();
 
     for (const card of cards) {
       try {
-        // Extraer texto completo de la tarjeta
-        const fullText = DOM.getDeepText(card);
-        if (!fullText || fullText.trim().length < 3) continue;
-
-        // Buscar enlace clickeable
-        const clickable = DOM.findClickable(card);
-        const url = clickable
-          ? (clickable.href || clickable.getAttribute('data-href') || '')
-          : '';
-
-        // Ignorar tarjetas sin URL navegable
-        // Filtrar URLs inválidas o de navegación
+        const url = card.href || '';
         if (!url || url.startsWith('javascript:')) continue;
-        if (!/bing\.com|microsoft\.com/i.test(url)) continue; // Solo URLs de Bing/Microsoft
+        if (!/bing\.com|microsoft\.com/i.test(url)) continue;
         if (/\/(redeem|profile|signin|status|history|earn$|dashboard$)/i.test(url)) continue;
 
-        // Evitar duplicados por URL
+        const fullText = card.innerText || '';
+        
+        let points = '';
+        const pointsEl = card.querySelector('.text-statusInformativeTintFg, .text-metadata');
+        if (pointsEl) {
+          const match = pointsEl.innerText.match(/\+?\s*(\d+)/);
+          if (match) points = '+' + match[1];
+        } else {
+          points = _extractPoints(fullText);
+        }
+
+        if (!points && fullText.length < 5) continue;
+
         const urlKey = url.split('?')[0];
         if (seenUrls.has(urlKey)) continue;
         seenUrls.add(urlKey);
 
-        // Extraer datos de la tarjeta
-        const points = _extractPoints(fullText);
-        const completed = DOM.hasCompletionMark(card) ||
+        const completed = card.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"]') !== null || 
           /\b(completad[oa]s?|listo|hecho|done|completed)\b/i.test(fullText) ||
-          /[✓✔]/.test(fullText);
+          /[✓✔]/.test(fullText) ||
+          card.getAttribute('data-disabled') === 'true' ||
+          card.classList.contains('data-disabled:cursor-default');
 
         const type = _detectType(url, card);
 
-        // Limpiar título: quitar puntos y recortar
-        let title = fullText
-          .replace(/\+\s*\d+/, '')  // quitar puntos
-          .replace(/\s+/g, ' ')     // normalizar espacios
-          .trim();
-
-        // Limitar longitud del título
-        if (title.length > 50) {
-          title = title.substring(0, 47) + '...';
-        }
-
-        // Si el título quedó vacío, usar aria-label o atributo title
-        if (!title || title.length < 2) {
-          title = (clickable && (clickable.title || clickable.getAttribute('aria-label'))) || 'Actividad diaria';
+        let title = "Tarea de Rewards";
+        const titleEl = card.querySelector('.text-globalBody2Strong, .text-globalBody1Strong, [class*="Body2Strong"]');
+        if (titleEl) {
+          title = titleEl.innerText.trim();
+        } else if (card.getAttribute('aria-label')) {
+          title = card.getAttribute('aria-label');
         }
 
         tasks.push({
-          title,
-          points,
-          type,
-          completed,
-          element: clickable || card,
-          url
+          title: title,
+          points: points || '+10',
+          type: type,
+          completed: completed,
+          element: card,
+          url: url
         });
 
-        console.log(`${TAG}   → ${completed ? '✅' : '⬜'} [${type}] ${title} (${points})`);
       } catch (err) {
-        // No romper el escaneo por un error en una tarjeta individual
-        console.error(`${TAG} Error procesando tarjeta:`, err);
+        console.error(`${TAG} Error parseando tarjeta React:`, err);
       }
     }
 
-    console.log(`${TAG} Escaneo completado: ${tasks.length} tareas (${tasks.filter(t => !t.completed).length} pendientes)`);
+    console.log(`${TAG} Escaneo completado. Tareas detectadas: ${tasks.length}`);
     return tasks;
   }
 
