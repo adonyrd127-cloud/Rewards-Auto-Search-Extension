@@ -173,7 +173,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         // Si no tiene puntos detectables Y no tiene marca de completado, no es una tarjeta de recompensa válida
         if (!points && !hasCheckmark) continue;
 
-        const urlKey = url.split('?')[0];
+        const urlKey = url;
         if (seenUrls.has(urlKey)) continue;
         seenUrls.add(urlKey);
 
