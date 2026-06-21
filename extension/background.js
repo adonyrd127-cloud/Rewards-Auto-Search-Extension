@@ -303,8 +303,12 @@ async function startSearchSession(mode, queue = []) {
     stats = s.stats;
   }
   
+  // Verify cached stats are from TODAY — if they're stale, ignore them
+  const today = new Date().toISOString().split("T")[0];
+  const statsAreFromToday = stats && stats.lastUpdatedDate === today;
+  
   let currentPoints = 0, maxPoints = 0;
-  if (stats) {
+  if (stats && statsAreFromToday) {
     if (mode === "desktop" && stats.pcSearch) {
       currentPoints = stats.pcSearch.current || 0;
       maxPoints = stats.pcSearch.max || 0;
@@ -316,8 +320,10 @@ async function startSearchSession(mode, queue = []) {
       maxPoints = stats.mobileSearch.max || 0;
     }
 
-    if (maxPoints === 0 || currentPoints >= maxPoints) {
-      console.log(`Skipping ${mode} mode: searches are already completed today or not available (${currentPoints}/${maxPoints} points).`);
+    // Only skip if we have REAL data from today AND searches are truly completed
+    // maxPoints must be > 0 (known) AND currentPoints must have reached it
+    if (maxPoints > 0 && currentPoints >= maxPoints) {
+      console.log(`Skipping ${mode} mode: searches are already completed today (${currentPoints}/${maxPoints} points).`);
       
       // If there are other modes queued, chain to the next one
       if (queue && queue.length > 0) {
@@ -334,6 +340,8 @@ async function startSearchSession(mode, queue = []) {
       }
       return;
     }
+  } else {
+    console.log(`Stats are stale or unavailable (lastUpdatedDate: ${stats?.lastUpdatedDate}, today: ${today}). Allowing searches.`);
   }
 
   // Determine search count
@@ -821,13 +829,15 @@ function notifyPopup() {
 async function syncUserInfo() {
   let retries = 3;
   let delay = 2000;
+  // CRITICAL: data must be declared at function scope so it's accessible after the while loop
+  let data = null;
   
   while (retries > 0) {
     try {
-      let data = null;
+      data = null;
       let usedFallback = false;
 
-      // 1. Intentar desde background
+      // 1. Intentar fetch directo desde el background service worker
       try {
         const res = await fetch("https://rewards.bing.com/api/getuserinfo", { 
           credentials: "include",
@@ -835,12 +845,13 @@ async function syncUserInfo() {
         });
         if (res.ok && res.type !== "opaqueredirect") {
           data = await res.json();
+          console.log("Rewards API: Background fetch succeeded.");
         }
       } catch (e) {
-        console.log("Rewards API: Background fetch failed, trying fallback.");
+        console.log("Rewards API: Background fetch failed, trying tab fallback.");
       }
 
-      // 2. Fallback inyectando script en una pestaña de Bing si el background falla
+      // 2. Fallback: inyectar script en pestaña de rewards.bing.com
       if (!data || !data.userStatus) {
         const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
         if (tabs.length > 0) {
@@ -849,142 +860,149 @@ async function syncUserInfo() {
               target: { tabId: tabs[0].id },
               world: "MAIN",
               func: () => {
-                // Estrategia 1: Leer el objeto dashboard directamente desde window
+                // Leer window.dashboard directamente
                 if (window.dashboard && window.dashboard.userStatus) {
                   try {
                     return JSON.parse(JSON.stringify({ userStatus: window.dashboard.userStatus }));
                   } catch(e) {}
                 }
-                
-                // Estrategia 2: Extraer objeto dashboard parseando el texto de los scripts (si está en un closure)
+                // Fallback: parsear script tags
                 try {
                   const scripts = document.querySelectorAll('script');
                   for (let s of scripts) {
-                    if (s.innerText && s.innerText.includes('var dashboard = ')) {
-                      const match = s.innerText.match(/var dashboard = (\{.*?\});/s);
+                    if (s.innerText && s.innerText.includes('var dashboard')) {
+                      const match = s.innerText.match(/var\s+dashboard\s*=\s*(\{[\s\S]*?\});/);
                       if (match && match[1]) {
                         try {
-                           const db = JSON.parse(match[1]);
-                           if (db && db.userStatus) {
-                              return JSON.parse(JSON.stringify({ userStatus: db.userStatus }));
-                           }
+                          const db = JSON.parse(match[1]);
+                          if (db && db.userStatus) {
+                            return JSON.parse(JSON.stringify({ userStatus: db.userStatus }));
+                          }
                         } catch(e) {}
                       }
                     }
                   }
                 } catch(e) {}
-                
                 return null;
               }
             });
             if (result && result[0] && result[0].result) {
               data = result[0].result;
               usedFallback = true;
+              console.log("Rewards API: Tab fallback succeeded.");
             }
           } catch (e) {
-            console.log("Rewards API: Content script fallback failed:", e);
+            console.log("Rewards API: Tab fallback failed:", e);
           }
+        } else {
+          console.log("Rewards API: No rewards.bing.com tab open for fallback.");
         }
       }
 
+      // Si no obtuvimos data, reintentar
       if (!data || !data.userStatus) {
         console.log(`Rewards API: No userStatus on attempt ${4 - retries}. Retrying...`);
         retries--;
-        if (retries === 0) return null;
+        if (retries === 0) {
+          console.log("Rewards API: All retries exhausted. Returning null.");
+          return null;
+        }
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
-        continue; // Try again!
+        continue;
       }
       
       if (usedFallback) {
-        console.log("Rewards API: Successfully fetched data using content script fallback.");
+        console.log("Rewards API: Data obtained via content script fallback.");
       }
       
-      // Si llegamos aquí, la respuesta fue exitosa, salir del bucle
+      // Éxito — salir del bucle
       break;
+
     } catch (e) {
       console.error(`Rewards API: Error in syncUserInfo (Retries left: ${retries - 1}):`, e);
       retries--;
       if (retries === 0) return null;
       await new Promise(resolve => setTimeout(resolve, delay));
-      delay *= 2; // Exponential backoff
+      delay *= 2;
     }
-  } // Fin del while
+  }
 
-  // Extraer datos tras el éxito
+  // Si data sigue siendo null después del loop (no debería llegar aquí, pero por seguridad)
+  if (!data || !data.userStatus) {
+    console.log("Rewards API: data is null after loop, returning null.");
+    return null;
+  }
+
+  // Extraer datos
   const userStatus = data.userStatus;
   const counters = userStatus.counters || {};
 
-      // Intentar obtener el 'Puntos de hoy' real del DOM si hay una pestaña abierta
-      // porque la API getuserinfo a veces no cuenta todo lo que la interfaz sí cuenta.
-      let realTodayPoints = userStatus.todayPoints || 0;
-      try {
-        const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
-        if (tabs.length > 0) {
-          const domResult = await chrome.scripting.executeScript({
-            target: { tabId: tabs[0].id },
-            func: () => {
-              // Buscar en el DOM el elemento que muestra los puntos de hoy
-              const elem = document.querySelector('mee-rewards-counter-animation span');
-              if (elem && elem.innerText) {
-                 const pts = parseInt(elem.innerText.replace(/\\D/g, ''));
-                 if (!isNaN(pts)) return pts;
-              }
-              return null;
-            }
-          });
-          if (domResult && domResult[0] && domResult[0].result) {
-            realTodayPoints = domResult[0].result;
+  // Intentar obtener el 'Puntos de hoy' real del DOM
+  let realTodayPoints = userStatus.todayPoints || 0;
+  try {
+    const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
+    if (tabs.length > 0) {
+      const domResult = await chrome.scripting.executeScript({
+        target: { tabId: tabs[0].id },
+        func: () => {
+          const elem = document.querySelector('mee-rewards-counter-animation span');
+          if (elem && elem.innerText) {
+            const pts = parseInt(elem.innerText.replace(/\D/g, ''));
+            if (!isNaN(pts)) return pts;
           }
+          return null;
         }
-      } catch (e) {
-        console.log("No se pudo obtener Puntos de hoy del DOM, usando valor de API.");
+      });
+      if (domResult && domResult[0] && domResult[0].result) {
+        realTodayPoints = domResult[0].result;
       }
-
-    // Standard PC Search
-    let pcCurrent = 0, pcMax = 0;
-    if (counters.pcSearch && counters.pcSearch[0]) {
-      pcCurrent = counters.pcSearch[0].pointProgress || 0;
-      pcMax = counters.pcSearch[0].pointProgressMax || 0;
     }
+  } catch (e) {
+    console.log("No se pudo obtener Puntos de hoy del DOM, usando valor de API.");
+  }
 
-    // Edge Search
-    let edgeCurrent = 0, edgeMax = 0;
-    if (counters.pcSearch && counters.pcSearch[1]) {
-      edgeCurrent = counters.pcSearch[1].pointProgress || 0;
-      edgeMax = counters.pcSearch[1].pointProgressMax || 0;
-    } else if (counters.edgeSearch && counters.edgeSearch[0]) {
-      edgeCurrent = counters.edgeSearch[0].pointProgress || 0;
-      edgeMax = counters.edgeSearch[0].pointProgressMax || 0;
-    }
+  // Standard PC Search
+  let pcCurrent = 0, pcMax = 0;
+  if (counters.pcSearch && counters.pcSearch[0]) {
+    pcCurrent = counters.pcSearch[0].pointProgress || 0;
+    pcMax = counters.pcSearch[0].pointProgressMax || 0;
+  }
 
-    // Mobile Search
-    let mobileCurrent = 0, mobileMax = 0;
-    if (counters.mobileSearch && counters.mobileSearch[0]) {
-      mobileCurrent = counters.mobileSearch[0].pointProgress || 0;
-      mobileMax = counters.mobileSearch[0].pointProgressMax || 0;
-    } else if (counters.mobileSearch && counters.mobileSearch.length > 0) {
-      // Some accounts use a different array index if there are multiple
-      mobileCurrent = counters.mobileSearch[counters.mobileSearch.length-1].pointProgress || 0;
-      mobileMax = counters.mobileSearch[counters.mobileSearch.length-1].pointProgressMax || 0;
-    } else if (!counters.mobileSearch && pcMax > 0 && pcMax <= 60) {
-      // In some regions or Level 1, there is no mobile search, only PC.
-      // So mobile search is effectively 0 max.
-      mobileMax = 0;
-    }
+  // Edge Search
+  let edgeCurrent = 0, edgeMax = 0;
+  if (counters.pcSearch && counters.pcSearch[1]) {
+    edgeCurrent = counters.pcSearch[1].pointProgress || 0;
+    edgeMax = counters.pcSearch[1].pointProgressMax || 0;
+  } else if (counters.edgeSearch && counters.edgeSearch[0]) {
+    edgeCurrent = counters.edgeSearch[0].pointProgress || 0;
+    edgeMax = counters.edgeSearch[0].pointProgressMax || 0;
+  }
 
-    const stats = {
-      todayPoints: realTodayPoints,
-      totalPoints: userStatus.availablePoints || 0,
-      streak: userStatus.streakInfo?.activityStreak || 0,
-      level: userStatus.levelInfo?.activeLevel || "Nivel 1",
-      lastUpdatedDate: new Date().toISOString().split("T")[0],
-      pcSearch: { current: pcCurrent, max: pcMax },
-      edgeSearch: { current: edgeCurrent, max: edgeMax },
-      mobileSearch: { current: mobileCurrent, max: mobileMax }
-    };
+  // Mobile Search
+  let mobileCurrent = 0, mobileMax = 0;
+  if (counters.mobileSearch && counters.mobileSearch[0]) {
+    mobileCurrent = counters.mobileSearch[0].pointProgress || 0;
+    mobileMax = counters.mobileSearch[0].pointProgressMax || 0;
+  } else if (counters.mobileSearch && counters.mobileSearch.length > 0) {
+    mobileCurrent = counters.mobileSearch[counters.mobileSearch.length-1].pointProgress || 0;
+    mobileMax = counters.mobileSearch[counters.mobileSearch.length-1].pointProgressMax || 0;
+  } else if (!counters.mobileSearch && pcMax > 0 && pcMax <= 60) {
+    mobileMax = 0;
+  }
 
-    await chrome.storage.local.set({ stats });
-    console.log("Rewards API: Synced real stats:", stats);
-    return stats;
+  const stats = {
+    todayPoints: realTodayPoints,
+    totalPoints: userStatus.availablePoints || 0,
+    streak: userStatus.streakInfo?.activityStreak || 0,
+    level: userStatus.levelInfo?.activeLevel || "Nivel 1",
+    lastUpdatedDate: new Date().toISOString().split("T")[0],
+    pcSearch: { current: pcCurrent, max: pcMax },
+    edgeSearch: { current: edgeCurrent, max: edgeMax },
+    mobileSearch: { current: mobileCurrent, max: mobileMax }
+  };
+
+  await chrome.storage.local.set({ stats });
+  console.log("Rewards API: Synced real stats:", stats);
+  return stats;
 }
