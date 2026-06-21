@@ -849,10 +849,31 @@ async function syncUserInfo() {
               target: { tabId: tabs[0].id },
               world: "MAIN",
               func: () => {
-                // Leer el objeto dashboard directamente desde el contexto de la página principal
+                // Estrategia 1: Leer el objeto dashboard directamente desde window
                 if (window.dashboard && window.dashboard.userStatus) {
-                  return window.dashboard;
+                  try {
+                    return JSON.parse(JSON.stringify({ userStatus: window.dashboard.userStatus }));
+                  } catch(e) {}
                 }
+                
+                // Estrategia 2: Extraer objeto dashboard parseando el texto de los scripts (si está en un closure)
+                try {
+                  const scripts = document.querySelectorAll('script');
+                  for (let s of scripts) {
+                    if (s.innerText && s.innerText.includes('var dashboard = ')) {
+                      const match = s.innerText.match(/var dashboard = (\{.*?\});/s);
+                      if (match && match[1]) {
+                        try {
+                           const db = JSON.parse(match[1]);
+                           if (db && db.userStatus) {
+                              return JSON.parse(JSON.stringify({ userStatus: db.userStatus }));
+                           }
+                        } catch(e) {}
+                      }
+                    }
+                  }
+                } catch(e) {}
+                
                 return null;
               }
             });
@@ -867,17 +888,32 @@ async function syncUserInfo() {
       }
 
       if (!data || !data.userStatus) {
-        console.log("Rewards API: No userStatus in response after all attempts.");
-        return null;
+        console.log(`Rewards API: No userStatus on attempt ${4 - retries}. Retrying...`);
+        retries--;
+        if (retries === 0) return null;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2;
+        continue; // Try again!
       }
       
       if (usedFallback) {
         console.log("Rewards API: Successfully fetched data using content script fallback.");
       }
       
-      // Si llegamos aquí, la respuesta fue exitosa
-      const userStatus = data.userStatus;
-      const counters = userStatus.counters || {};
+      // Si llegamos aquí, la respuesta fue exitosa, salir del bucle
+      break;
+    } catch (e) {
+      console.error(`Rewards API: Error in syncUserInfo (Retries left: ${retries - 1}):`, e);
+      retries--;
+      if (retries === 0) return null;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      delay *= 2; // Exponential backoff
+    }
+  } // Fin del while
+
+  // Extraer datos tras el éxito
+  const userStatus = data.userStatus;
+  const counters = userStatus.counters || {};
 
       // Intentar obtener el 'Puntos de hoy' real del DOM si hay una pestaña abierta
       // porque la API getuserinfo a veces no cuenta todo lo que la interfaz sí cuenta.
@@ -951,13 +987,4 @@ async function syncUserInfo() {
     await chrome.storage.local.set({ stats });
     console.log("Rewards API: Synced real stats:", stats);
     return stats;
-  } catch (e) {
-      console.error(`Rewards API: Error in syncUserInfo (Retries left: ${retries - 1}):`, e);
-      retries--;
-      if (retries === 0) return null;
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay *= 2; // Exponential backoff
-    }
-  }
-  return null;
 }
