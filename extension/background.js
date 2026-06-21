@@ -847,19 +847,13 @@ async function syncUserInfo() {
           try {
             const result = await chrome.scripting.executeScript({
               target: { tabId: tabs[0].id },
-              func: async () => {
-                try {
-                  const r = await fetch("https://rewards.bing.com/api/getuserinfo", { 
-                    credentials: "include",
-                    redirect: "manual"
-                  });
-                  if (r.ok && r.type !== "opaqueredirect") {
-                    return await r.json();
-                  }
-                  return null;
-                } catch (err) {
-                  return null;
+              world: "MAIN",
+              func: () => {
+                // Leer el objeto dashboard directamente desde el contexto de la página principal
+                if (window.dashboard && window.dashboard.userStatus) {
+                  return window.dashboard;
                 }
+                return null;
               }
             });
             if (result && result[0] && result[0].result) {

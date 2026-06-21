@@ -23,7 +23,10 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     'more promotions',
     'más promociones',
     'other activities',
-    'otras actividades'
+    'otras actividades',
+    'explore more',
+    'explora más',
+    'explorar más'
   ];
 
   /** URLs que debemos ignorar (no son tareas reales) */
@@ -86,8 +89,8 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    console.log(`${TAG} No se pudo localizar la sección More Activities`);
-    return null;
+    console.log(`${TAG} No se pudo localizar la sección exacta More Activities, buscando en todo el documento.`);
+    return document.body;
   }
 
   /**
@@ -161,6 +164,9 @@ window.RewardsWorkers = window.RewardsWorkers || {};
 
     // Selectores para localizar tarjetas dentro de la sección
     const cardSelectors = [
+      'mee-rewards-more-activities-card-item',
+      'mee-card.more-activities-card',
+      'mee-card-group[data-bi-area*="more"] mee-card',
       'mee-card',
       '[class*="card"]',
       '[class*="promo"]',

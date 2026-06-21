@@ -21,7 +21,9 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     'daily set',
     'conjunto diario',
     'daily activities',
-    'actividades diarias'
+    'actividades diarias',
+    'formas diarias de ganar',
+    'daily ways to earn'
   ];
 
   /** Patrones de URL para clasificar el tipo de tarea */
@@ -81,8 +83,10 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    console.log(`${TAG} No se pudo localizar la sección Daily Set`);
-    return null;
+    // New Fallback: Just return the body if we can't find a specific section,
+    // we'll search the whole page for specific daily set cards.
+    console.log(`${TAG} No se pudo localizar la sección exacta Daily Set, se buscará en todo el documento.`);
+    return document.body;
   }
 
   /**
@@ -146,10 +150,11 @@ window.RewardsWorkers = window.RewardsWorkers || {};
 
     // Buscar tarjetas individuales dentro de la sección
     const cardSelectors = [
-      'mee-card',
-      'mee-card-group mee-card',
-      '[class*="card"]',
+      'mee-rewards-daily-set-item',
+      'mee-card.daily-set-card',
+      'mee-card-group[data-bi-area="DailySet"] mee-card',
       '[class*="ds-card"]',
+      'mee-card',
       '[data-bi-id]',
       'a[href]'
     ].join(', ');
