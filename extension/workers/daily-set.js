@@ -84,8 +84,8 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     }
 
     // No se encontró la sección Daily Set
-    console.log(`${TAG} No se pudo localizar la sección Daily Set.`);
-    return null;
+    console.log(`${TAG} No se pudo localizar la sección Daily Set. Usando document.body como fallback.`);
+    return document.body;
   }
 
   /**
@@ -150,10 +150,9 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     // Buscar tarjetas individuales dentro de la sección
     const cardSelectors = [
       'mee-rewards-daily-set-item',
-      'mee-card.daily-set-card',
       'mee-card-group[data-bi-area="DailySet"] mee-card',
-      '[class*="ds-card"]',
-      'mee-card'
+      '.daily-set-card',
+      'mee-card[data-bi-area="DailySet"]'
     ].join(', ');
 
     let cards = DOM.deepQueryAll(section, cardSelectors);

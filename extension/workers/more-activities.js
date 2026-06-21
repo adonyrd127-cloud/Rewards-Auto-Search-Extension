@@ -102,8 +102,8 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    console.log(`${TAG} No se pudo localizar la sección More Activities.`);
-    return null;
+    console.log(`${TAG} No se pudo localizar la sección More Activities. Usando document.body como fallback.`);
+    return document.body;
   }
 
   /**
@@ -178,10 +178,9 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     // Selectores para localizar tarjetas dentro de la sección
     const cardSelectors = [
       'mee-rewards-more-activities-card-item',
-      'mee-card.more-activities-card',
-      'mee-card-group[data-bi-area*="more"] mee-card',
-      'mee-card',
-      '[data-bi-id]'
+      'mee-card-group[data-bi-area="MoreActivities"] mee-card',
+      'mee-card[data-bi-area="MoreActivities"]',
+      '.more-activities-card'
     ].join(', ');
 
     let cards = DOM.deepQueryAll(section, cardSelectors);

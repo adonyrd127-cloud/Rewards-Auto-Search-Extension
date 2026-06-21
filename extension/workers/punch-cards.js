@@ -83,8 +83,8 @@ window.RewardsWorkers = window.RewardsWorkers || {};
 
     // Último recurso: buscar tarjetas con indicador de progreso en todo el body
     // Las punch cards pueden no tener sección dedicada en algunos diseños
-    console.log(`${TAG} No se encontró sección dedicada — buscando tarjetas con progreso en todo el dashboard`);
-    return null;
+    console.log(`${TAG} No se encontró sección dedicada — usando document.body como fallback.`);
+    return document.body;
   }
 
   /**
@@ -116,10 +116,10 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    */
   function _findPunchCardElements(root) {
     const cardSelectors = [
-      'mee-card',
-      '[class*="card"]',
-      '[class*="punch"]',
-      '[data-bi-id]'
+      'mee-rewards-punch-card-item',
+      'mee-card-group[data-bi-area="PunchCards"] mee-card',
+      'mee-card[data-bi-area="PunchCards"]',
+      '.punch-card-item'
     ].join(', ');
 
     let cards = DOM.deepQueryAll(root, cardSelectors);

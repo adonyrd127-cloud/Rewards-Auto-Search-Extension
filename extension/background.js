@@ -948,44 +948,108 @@ async function syncUserInfo() {
     } catch (e) {
       console.error(`Rewards API: Error in syncUserInfo (Retries left: ${retries - 1}):`, e);
       retries--;
-      if (retries === 0) return null;
+      if (retries === 0) break;
       await new Promise(resolve => setTimeout(resolve, delay));
       delay *= 2;
     }
   }
 
-  // Si data sigue siendo null después del loop (no debería llegar aquí, pero por seguridad)
-  if (!data || !data.userStatus) {
-    console.log("Rewards API: data is null after loop, returning null.");
-    return null;
+  // Obtener stats previos por si el API falla por completo
+  const prevData = await chrome.storage.local.get("stats");
+  const prevStats = prevData.stats || {};
+
+  // Si data sigue siendo null después del loop, usamos un fallback
+  let userStatus = {};
+  if (data && data.userStatus) {
+    userStatus = data.userStatus;
+  } else {
+    console.log("Rewards API: data is null after loop, proceeding with DOM fallback only.");
   }
 
-  // Extraer datos
-  const userStatus = data.userStatus;
   const counters = userStatus.counters || {};
 
-  // Intentar obtener el 'Puntos de hoy' real del DOM
-  let realTodayPoints = userStatus.todayPoints || 0;
+  // Intentar obtener Puntos y Racha robustamente del DOM
+  let domTodayPoints = null;
+  let domTotalPoints = null;
+  let domStreak = null;
   try {
     const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
     if (tabs.length > 0) {
       const domResult = await chrome.scripting.executeScript({
         target: { tabId: tabs[0].id },
         func: () => {
-          const elem = document.querySelector('mee-rewards-counter-animation span');
-          if (elem && elem.innerText) {
-            const pts = parseInt(elem.innerText.replace(/\D/g, ''));
-            if (!isNaN(pts)) return pts;
+          let todayPts = null;
+          let totalPts = null;
+          let stk = null;
+          
+          // Total Points / Available Points
+          const totalElems = document.querySelectorAll('mee-rewards-counter-animation span, [data-bi-id="points"], .points-value, [data-bi-id="available-points"]');
+          for (let el of totalElems) {
+            if (el && el.innerText) {
+              const pts = parseInt(el.innerText.replace(/\D/g, ''));
+              if (!isNaN(pts) && pts > 0) {
+                totalPts = pts;
+                break;
+              }
+            }
           }
-          return null;
+
+          // Today Points
+          const todayElems = document.querySelectorAll('mee-rewards-user-status-item[data-bi-id="today-points"] .status-item-value');
+          for (let el of todayElems) {
+            if (el && el.innerText) {
+              const pts = parseInt(el.innerText.replace(/\D/g, ''));
+              if (!isNaN(pts)) {
+                todayPts = pts;
+                break;
+              }
+            }
+          }
+          
+          // Streak
+          const stkElems = document.querySelectorAll('.streak-count, mee-rewards-daily-set-section .streak-count, [data-bi-id="streak"], mee-rewards-user-status-item[data-bi-id="streak"] .status-item-value');
+          for (let el of stkElems) {
+            if (el && el.innerText) {
+              const parsedStk = parseInt(el.innerText.replace(/\D/g, ''));
+              if (!isNaN(parsedStk)) {
+                stk = parsedStk;
+                break;
+              }
+            }
+          }
+          
+          return { todayPts, totalPts, stk };
         }
       });
       if (domResult && domResult[0] && domResult[0].result) {
-        realTodayPoints = domResult[0].result;
+        domTodayPoints = domResult[0].result.todayPts;
+        domTotalPoints = domResult[0].result.totalPts;
+        domStreak = domResult[0].result.stk;
       }
     }
   } catch (e) {
-    console.log("No se pudo obtener Puntos de hoy del DOM, usando valor de API.");
+    console.log("No se pudo obtener Puntos/Racha del DOM, usando valor de API o previos.");
+  }
+
+  let realTodayPoints = userStatus.todayPoints;
+  if (realTodayPoints === undefined || realTodayPoints === 0) {
+    realTodayPoints = domTodayPoints !== null ? domTodayPoints : prevStats.todayPoints || 0;
+  }
+
+  let realTotalPoints = userStatus.availablePoints;
+  if (realTotalPoints === undefined || realTotalPoints === 0) {
+    realTotalPoints = domTotalPoints !== null ? domTotalPoints : prevStats.totalPoints || 0;
+  }
+  if (domTotalPoints !== null && (!data || !data.userStatus)) {
+    realTotalPoints = domTotalPoints;
+  }
+  
+  let realStreak = userStatus.streakInfo?.activityStreak;
+  if (realStreak === undefined || realStreak === 0) {
+    realStreak = domStreak !== null ? domStreak : prevStats.streak || 0;
+  }
+  if (domStreak !== null && domStreak > (realStreak || 0)) {
+    realStreak = domStreak;
   }
 
   // Standard PC Search
@@ -993,6 +1057,8 @@ async function syncUserInfo() {
   if (counters.pcSearch && counters.pcSearch[0]) {
     pcCurrent = counters.pcSearch[0].pointProgress || 0;
     pcMax = counters.pcSearch[0].pointProgressMax || 0;
+  } else if (prevStats.pcSearch) {
+    pcCurrent = prevStats.pcSearch.current; pcMax = prevStats.pcSearch.max;
   }
 
   // Edge Search
@@ -1003,6 +1069,8 @@ async function syncUserInfo() {
   } else if (counters.edgeSearch && counters.edgeSearch[0]) {
     edgeCurrent = counters.edgeSearch[0].pointProgress || 0;
     edgeMax = counters.edgeSearch[0].pointProgressMax || 0;
+  } else if (prevStats.edgeSearch) {
+    edgeCurrent = prevStats.edgeSearch.current; edgeMax = prevStats.edgeSearch.max;
   }
 
   // Mobile Search
@@ -1015,13 +1083,15 @@ async function syncUserInfo() {
     mobileMax = counters.mobileSearch[counters.mobileSearch.length-1].pointProgressMax || 0;
   } else if (!counters.mobileSearch && pcMax > 0 && pcMax <= 60) {
     mobileMax = 0;
+  } else if (prevStats.mobileSearch && (!counters.mobileSearch || counters.mobileSearch.length === 0)) {
+    mobileCurrent = prevStats.mobileSearch.current; mobileMax = prevStats.mobileSearch.max;
   }
 
   const stats = {
-    todayPoints: realTodayPoints,
-    totalPoints: userStatus.availablePoints || 0,
-    streak: userStatus.streakInfo?.activityStreak || 0,
-    level: userStatus.levelInfo?.activeLevel || "Nivel 1",
+    todayPoints: realTodayPoints || realTotalPoints,
+    totalPoints: realTotalPoints,
+    streak: realStreak,
+    level: userStatus.levelInfo?.activeLevel || prevStats.level || "Nivel 1",
     lastUpdatedDate: new Date().toISOString().split("T")[0],
     pcSearch: { current: pcCurrent, max: pcMax },
     edgeSearch: { current: edgeCurrent, max: edgeMax },
