@@ -83,10 +83,9 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    // New Fallback: Just return the body if we can't find a specific section,
-    // we'll search the whole page for specific daily set cards.
-    console.log(`${TAG} No se pudo localizar la sección exacta Daily Set, se buscará en todo el documento.`);
-    return document.body;
+    // No se encontró la sección Daily Set
+    console.log(`${TAG} No se pudo localizar la sección Daily Set.`);
+    return null;
   }
 
   /**
@@ -154,9 +153,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       'mee-card.daily-set-card',
       'mee-card-group[data-bi-area="DailySet"] mee-card',
       '[class*="ds-card"]',
-      'mee-card',
-      '[data-bi-id]',
-      'a[href]'
+      'mee-card'
     ].join(', ');
 
     let cards = DOM.deepQueryAll(section, cardSelectors);
@@ -184,7 +181,10 @@ window.RewardsWorkers = window.RewardsWorkers || {};
           : '';
 
         // Ignorar tarjetas sin URL navegable
+        // Filtrar URLs inválidas o de navegación
         if (!url || url.startsWith('javascript:')) continue;
+        if (!/bing\.com|microsoft\.com/i.test(url)) continue; // Solo URLs de Bing/Microsoft
+        if (/\/(redeem|profile|signin|status|history|earn$|dashboard$)/i.test(url)) continue;
 
         // Evitar duplicados por URL
         const urlKey = url.split('?')[0];

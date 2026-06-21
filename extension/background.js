@@ -526,6 +526,14 @@ async function runSessionLoop(session) {
       
       // Update stats and history
       await updateStatsAndHistory(session);
+
+      // Refresh stats from API after session completes (best effort)
+      try {
+        await syncUserInfo();
+      } catch(e) {
+        console.log('Post-session syncUserInfo failed (non-critical):', e);
+      }
+
       notifyPopup();
 
       // Clean up tab
@@ -649,6 +657,24 @@ async function updateStatsAndHistory(session) {
   }
 
   stats.totalPoints += session.pointsEarned;
+
+    // Update search counters to reflect completed session
+    if (session.mode === 'desktop' && stats.pcSearch) {
+      stats.pcSearch.current = Math.min(
+        (stats.pcSearch.current || 0) + session.pointsEarned,
+        stats.pcSearch.max || 90
+      );
+    } else if (session.mode === 'edge' && stats.edgeSearch) {
+      stats.edgeSearch.current = Math.min(
+        (stats.edgeSearch.current || 0) + session.pointsEarned,
+        stats.edgeSearch.max || 60
+      );
+    } else if (session.mode === 'mobile' && stats.mobileSearch) {
+      stats.mobileSearch.current = Math.min(
+        (stats.mobileSearch.current || 0) + session.pointsEarned,
+        stats.mobileSearch.max || 60
+      );
+    }
 
   // Add history item
   const historyItem = {

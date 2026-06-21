@@ -27,17 +27,36 @@ if (isRewardsPage) {
 
 // --- BING SEARCH QUIZ/POLL AUTO-SOLVER & HUMANIZATION ---
 if (isSearchPage) {
-  console.log("[RewardsBot] Cargado en Bing Search. Verificando quizzes/polls y simulando lectura...");
-  setTimeout(solveActiveTasks, 2500);
-  
-  // Simular lectura aleatoria para parecer más humano (solo 50% de las veces)
-  if (Math.random() > 0.5) {
-    setTimeout(() => {
-      if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateReading) {
-        window.RewardsUtils.Human.simulateReading();
-      }
-    }, 1500);
+  // Guardar flag si proviene de rewards.bing.com (tarea clickeada)
+  if (document.referrer && document.referrer.includes("rewards.bing.com")) {
+    sessionStorage.setItem("isRewardsTaskTab", "true");
+    console.log("[RewardsBot] Referrer es rewards.bing.com. Marcando pestaña en sessionStorage: isRewardsTaskTab = true");
   }
+
+  // Leer sesión de chrome.storage.local para verificar estado
+  chrome.storage.local.get("session", (data) => {
+    const session = data.session || {};
+    const isRunning = session.status === "running";
+    const isRewardsTask = sessionStorage.getItem("isRewardsTaskTab") === "true";
+
+    console.log(`[RewardsBot] Bing Search Page. Estado sesión: ${session.status}, isRewardsTaskTab: ${isRewardsTask}`);
+
+    if (isRunning || isRewardsTask) {
+      console.log("[RewardsBot] Condición cumplida (sesión activa o tarea de Rewards). Iniciando auto-solver y lectura...");
+      setTimeout(solveActiveTasks, 2500);
+      
+      // Simular lectura aleatoria para parecer más humano (solo 50% de las veces)
+      if (Math.random() > 0.5) {
+        setTimeout(() => {
+          if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateReading) {
+            window.RewardsUtils.Human.simulateReading();
+          }
+        }, 1500);
+      }
+    } else {
+      console.log("[RewardsBot] Auto-solver y lectura omitidos: la sesión no está activa y no es una tarea de Rewards.");
+    }
+  });
 }
 
 // ============================================================
@@ -223,30 +242,39 @@ async function runFullScan(panel, globalStatus, claimAllBtn) {
       streakBonus: null
     };
 
-    // Escanear cada categoría usando los workers disponibles
-    try {
-      if (window.RewardsWorkers && window.RewardsWorkers.DailySet) {
-        results.dailySet = await window.RewardsWorkers.DailySet.scan();
-      }
-    } catch (e) { console.log("[RewardsBot] Error escaneando Daily Set:", e); }
+    // Detectar tipo de página para ejecutar solo los workers relevantes
+    const isDashboard = window.location.pathname.includes('/dashboard');
+    const isEarn = window.location.pathname.includes('/earn');
 
-    try {
-      if (window.RewardsWorkers && window.RewardsWorkers.MoreActivities) {
-        results.moreActivities = await window.RewardsWorkers.MoreActivities.scan();
-      }
-    } catch (e) { console.log("[RewardsBot] Error escaneando More Activities:", e); }
+    // Daily Set and Punch Cards are on /dashboard
+    if (!isEarn) {
+      try {
+        if (window.RewardsWorkers && window.RewardsWorkers.DailySet) {
+          results.dailySet = await window.RewardsWorkers.DailySet.scan();
+        }
+      } catch (e) { console.log("[RewardsBot] Error escaneando Daily Set:", e); }
 
-    try {
-      if (window.RewardsWorkers && window.RewardsWorkers.PunchCards) {
-        results.punchCards = await window.RewardsWorkers.PunchCards.scan();
-      }
-    } catch (e) { console.log("[RewardsBot] Error escaneando Punch Cards:", e); }
+      try {
+        if (window.RewardsWorkers && window.RewardsWorkers.PunchCards) {
+          results.punchCards = await window.RewardsWorkers.PunchCards.scan();
+        }
+      } catch (e) { console.log("[RewardsBot] Error escaneando Punch Cards:", e); }
+    }
 
-    try {
-      if (window.RewardsWorkers && window.RewardsWorkers.StreakBonus) {
-        results.streakBonus = await window.RewardsWorkers.StreakBonus.scan();
-      }
-    } catch (e) { console.log("[RewardsBot] Error escaneando Streak Bonus:", e); }
+    // More Activities and Streak Bonus are on /earn
+    if (!isDashboard) {
+      try {
+        if (window.RewardsWorkers && window.RewardsWorkers.MoreActivities) {
+          results.moreActivities = await window.RewardsWorkers.MoreActivities.scan();
+        }
+      } catch (e) { console.log("[RewardsBot] Error escaneando More Activities:", e); }
+
+      try {
+        if (window.RewardsWorkers && window.RewardsWorkers.StreakBonus) {
+          results.streakBonus = await window.RewardsWorkers.StreakBonus.scan();
+        }
+      } catch (e) { console.log("[RewardsBot] Error escaneando Streak Bonus:", e); }
+    }
 
     // Actualizar la UI del panel con los resultados
     updatePanelUI(results, claimAllBtn, globalStatus, panel);

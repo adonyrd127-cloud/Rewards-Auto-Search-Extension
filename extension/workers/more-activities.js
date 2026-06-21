@@ -37,7 +37,20 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     /welcome/i,
     /profile/i,
     /dashboard$/i,
-    /^javascript:/i
+    /\/earn$/i,
+    /\/status/i,
+    /\/history/i,
+    /^javascript:/i,
+    /privacy/i,
+    /terms/i,
+    /legal/i,
+    /about/i,
+    /help/i,
+    /support/i,
+    /feedback/i,
+    /microsoft\.com\/store/i,
+    /pointsbreakdown/i,
+    /#$/
   ];
 
   // ---------------------------------------------------------------------------
@@ -89,8 +102,8 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    console.log(`${TAG} No se pudo localizar la sección exacta More Activities, buscando en todo el documento.`);
-    return document.body;
+    console.log(`${TAG} No se pudo localizar la sección More Activities.`);
+    return null;
   }
 
   /**
@@ -168,10 +181,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       'mee-card.more-activities-card',
       'mee-card-group[data-bi-area*="more"] mee-card',
       'mee-card',
-      '[class*="card"]',
-      '[class*="promo"]',
-      '[data-bi-id]',
-      'a[href]'
+      '[data-bi-id]'
     ].join(', ');
 
     let cards = DOM.deepQueryAll(section, cardSelectors);
