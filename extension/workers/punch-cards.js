@@ -81,10 +81,9 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    // Último recurso: buscar tarjetas con indicador de progreso en todo el body
-    // Las punch cards pueden no tener sección dedicada en algunos diseños
-    console.log(`${TAG} No se encontró sección dedicada — usando document.body como fallback.`);
-    return document.body;
+    // Último recurso: retornar null
+    console.log(`${TAG} No se pudo localizar la sección Punch Cards. Retornando null.`);
+    return null;
   }
 
   /**
@@ -162,8 +161,64 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    * @returns {Array<{title: string, points: string, currentStep: number, totalSteps: number, completed: boolean, element: Element, url: string}>}
    */
   async function scan() {
-    console.log(`${TAG} Escaneo delegado a daily-set.js (escaneo global React) para evitar duplicados.`);
-    return [];
+    console.log(`${TAG} Iniciando escaneo de Punch Cards...`);
+
+    const section = _findPunchCardSection();
+    if (!section) {
+      console.log(`${TAG} Sección Punch Cards no encontrada.`);
+      return [];
+    }
+
+    const cards = _findPunchCardElements(section);
+    console.log(`${TAG} Elementos Punch Cards encontrados: ${cards.length}`);
+
+    const tasks = [];
+    const seenUrls = new Set();
+
+    for (const card of cards) {
+      try {
+        const text = DOM.getDeepText(card);
+        const progress = _extractProgress(text);
+        if (!progress) continue;
+
+        // Intentar encontrar el enlace de la punch card
+        const link = DOM.deepQuery(card, 'a[href]');
+        if (!link) continue;
+
+        const url = link.href || '';
+        if (!url || url.startsWith('javascript:')) continue;
+
+        // Evitar duplicados
+        if (seenUrls.has(url)) continue;
+        seenUrls.add(url);
+
+        const points = _extractPoints(text) || '+100';
+        const completed = progress.current === progress.total;
+
+        // Intentar extraer el título
+        let title = "Tarjeta perforada";
+        const titleEl = DOM.deepQuery(card, 'h3, h4, .title, [class*="title"], [class*="heading"]');
+        if (titleEl) {
+          title = DOM.getDeepText(titleEl).trim();
+        }
+
+        tasks.push({
+          title: title,
+          points: points,
+          currentStep: progress.current,
+          totalSteps: progress.total,
+          completed: completed,
+          element: link, // Guardar el enlace para poder hacer clic
+          url: url
+        });
+
+      } catch (err) {
+        console.error(`${TAG} Error parseando punch card:`, err);
+      }
+    }
+
+    console.log(`${TAG} Escaneo completado. Punch Cards detectadas: ${tasks.length}`);
+    return tasks;
   }
 
   /**

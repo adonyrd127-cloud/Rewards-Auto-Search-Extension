@@ -102,8 +102,8 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    console.log(`${TAG} No se pudo localizar la sección More Activities. Usando document.body como fallback.`);
-    return document.body;
+    console.log(`${TAG} No se pudo localizar la sección More Activities. Retornando null.`);
+    return null;
   }
 
   /**
@@ -167,8 +167,77 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    * @returns {Array<{title: string, points: string, type: string, completed: boolean, element: Element, url: string}>}
    */
   async function scan() {
-    console.log(`${TAG} Escaneo delegado a daily-set.js (escaneo global React) para evitar duplicados.`);
-    return [];
+    console.log(`${TAG} Iniciando escaneo de More Activities...`);
+
+    const section = _findMoreActivitiesSection();
+    if (!section) {
+      console.log(`${TAG} Sección More Activities no encontrada.`);
+      return [];
+    }
+
+    const cardSelectors = 'a.group\\/ctrl.cursor-pointer[href]';
+    let cards = section.querySelectorAll(cardSelectors);
+    console.log(`${TAG} Enlaces encontrados en la sección More Activities: ${cards.length}`);
+
+    const tasks = [];
+    const seenUrls = new Set();
+
+    for (const card of cards) {
+      try {
+        const url = card.href || '';
+        if (!url || url.startsWith('javascript:')) continue;
+        if (_shouldIgnoreUrl(url)) continue;
+
+        const fullText = card.innerText || '';
+        
+        let points = '';
+        const pointsEl = card.querySelector('.text-statusInformativeTintFg, .text-metadata, [class*="statusInformative"]');
+        if (pointsEl) {
+          const match = pointsEl.innerText.match(/\+?\s*(\d+)/);
+          if (match) points = '+' + match[1];
+        } else {
+          points = _extractPoints(fullText);
+        }
+
+        const hasCheckmark = card.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"]') !== null || 
+          /\b(completad[oa]s?|listo|hecho|done|completed)\b/i.test(fullText) ||
+          /[✓✔]/.test(fullText);
+
+        // Si no tiene puntos detectables Y no tiene marca de completado, no es una tarjeta de recompensa válida
+        if (!points && !hasCheckmark) continue;
+
+        const urlKey = url;
+        if (seenUrls.has(urlKey)) continue;
+        seenUrls.add(urlKey);
+
+        const completed = hasCheckmark;
+
+        const type = _detectType(url, card);
+
+        let title = "Actividad Promocional";
+        const titleEl = card.querySelector('.text-globalBody2Strong, .text-globalBody1Strong, [class*="Body2Strong"]');
+        if (titleEl) {
+          title = titleEl.innerText.trim();
+        } else if (card.getAttribute('aria-label')) {
+          title = card.getAttribute('aria-label');
+        }
+
+        tasks.push({
+          title: title,
+          points: points || '+10',
+          type: type,
+          completed: completed,
+          element: card,
+          url: url
+        });
+
+      } catch (err) {
+        console.error(`${TAG} Error parseando tarjeta React en More Activities:`, err);
+      }
+    }
+
+    console.log(`${TAG} Escaneo completado. Tareas detectadas en More Activities: ${tasks.length}`);
+    return tasks;
   }
 
   /**

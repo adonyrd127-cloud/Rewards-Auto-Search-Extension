@@ -193,6 +193,47 @@ window.RewardsUtils.Human = (function () {
   }
 
   /**
+   * simulateSearchPageInteractions — Performs scrolls, mouse moves, and hovers on search results.
+   */
+  async function simulateSearchPageInteractions() {
+    console.log('[RewardsUtils.Human] Starting search page interactions...');
+    
+    // 1. Scroll down a random amount
+    const scrollAmount = randomInt(300, 700);
+    await scroll(scrollAmount);
+    await delay(500, 1500);
+
+    // 2. Find search results and simulate hovers
+    const results = document.querySelectorAll('#b_results > li, .g, a[href*="http"]');
+    if (results.length > 0) {
+      const numHovers = randomInt(1, 3);
+      for (let i = 0; i < numHovers; i++) {
+        const idx = randomInt(0, results.length - 1);
+        const el = results[idx];
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            // Dispatch mouseover/mousemove
+            el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, view: window }));
+            el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, view: window }));
+            await delay(300, 800);
+            el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, view: window }));
+          }
+        }
+      }
+    }
+
+    // 3. Scroll back up or down a bit more
+    if (Math.random() > 0.5) {
+      await scroll(-randomInt(200, 500));
+    } else {
+      await scroll(randomInt(100, 300));
+    }
+    
+    await delay(500, 1000);
+  }
+
+  /**
    * typeIntoInput — Escribe texto carácter por carácter en un campo de entrada.
    *
    * Simula la escritura humana:
@@ -343,6 +384,7 @@ window.RewardsUtils.Human = (function () {
     scroll,
     scrollIntoViewIfNeeded,
     simulateReading,
+    simulateSearchPageInteractions,
     typeIntoInput,
     submitSearch,
     jitterMs,

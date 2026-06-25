@@ -1,301 +1,370 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rewards Auto Search & Claimer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <!-- Dashboard Main Container -->
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
       <div class="logo-area">
         <div class="logo-icon-wrapper">
-          <svg class="logo-svg" viewBox="0 0 24 24" width="24" height="24">
-            <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" fill="#10b981"/>
-            <path d="M12 17l-5 4 1.5-7-5-5 7-.5L12 2l3 6.5 7 .5-5 5 1.5 7z" stroke="#34d399" stroke-width="1" fill="none"/>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
           </svg>
         </div>
         <div class="logo-text">
-          <h1>Rewards<span class="text-glow">Auto</span></h1>
-          <span class="version">v1.0.0</span>
+          <h1>Rewards <span class="text-glow">Auto</span></h1>
+          <span class="version">v3.1</span>
         </div>
       </div>
-      
       <div class="status-badge" id="global-status">
-        <span class="status-dot green"></span>
-        <span class="status-label">Inactivo</span>
+        <span class="status-dot green" id="status-dot"></span>
+        <span id="status-text">Listo</span>
       </div>
     </header>
 
-    <!-- Navigation Tabs -->
+    <!-- Navigation -->
     <nav class="nav-tabs">
       <button class="tab-btn active" data-tab="dashboard">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-        <span>Panel</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        <span>Dashboard</span>
       </button>
       <button class="tab-btn" data-tab="settings">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         <span>Ajustes</span>
       </button>
       <button class="tab-btn" data-tab="schedule">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         <span>Horario</span>
       </button>
       <button class="tab-btn" data-tab="history">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>
         <span>Historial</span>
       </button>
     </nav>
 
-    <!-- Content Sections -->
+    <!-- Content -->
     <main class="app-content">
       
-      <!-- Tab 1: Dashboard -->
-      <section id="tab-dashboard" class="tab-content active">
-        <!-- Stats Row -->
+      <!-- ============ TAB: DASHBOARD ============ -->
+      <div class="tab-content active" id="tab-dashboard">
+        
+        <!-- Stats Grid with Circular Progress -->
         <div class="stats-grid">
           <div class="stat-card">
-            <span class="stat-title">Puntos de hoy</span>
-            <div class="stat-value-row">
-              <span class="stat-value" id="stat-today-points">0</span>
-              <span class="points-badge">+3 pts/búsqueda</span>
+            <div class="stat-header">
+              <span class="stat-title">Puntos Hoy</span>
+              <span class="stat-badge">+3 pts/búsq</span>
+            </div>
+            <div class="stat-body">
+              <div class="circular-progress" data-value="0" id="circle-today">
+                <svg class="progress-ring" viewBox="0 0 100 100">
+                  <circle class="progress-ring-bg" cx="50" cy="50" r="42"></circle>
+                  <circle class="progress-ring-fill" cx="50" cy="50" r="42" id="ring-today"></circle>
+                </svg>
+                <div class="progress-value">
+                  <span class="stat-value text-green skeleton-text" id="stat-today-points">0</span>
+                </div>
+              </div>
             </div>
           </div>
+
           <div class="stat-card">
-            <span class="stat-title">Racha Diaria</span>
-            <div class="stat-value-row">
-              <span class="stat-value" id="stat-streak">0</span>
+            <div class="stat-header">
+              <span class="stat-title">Racha Diaria</span>
               <span class="streak-icon">🔥</span>
             </div>
-          </div>
-          <div class="stat-card">
-            <span class="stat-title">Nivel de Cuenta</span>
-            <div class="stat-value-row">
-              <span class="stat-value text-green" style="font-size: 20px;" id="stat-level">-</span>
-              <span>⭐</span>
+            <div class="stat-body center">
+              <span class="stat-value text-yellow skeleton-text" id="stat-streak">0</span>
+              <span class="stat-sub">días</span>
+            </div>
+            <div class="stat-footer">
+              <div class="mini-bar">
+                <div class="mini-bar-fill" style="width: 0%" id="streak-bar"></div>
+              </div>
             </div>
           </div>
-          <div class="stat-card full-width">
-            <span class="stat-title">Puntos Totales (Disponibles)</span>
-            <span class="stat-value text-green" id="stat-total-points">0</span>
+
+          <div class="stat-card full-width flex-row justify-between items-center" style="position: relative;">
+            <div style="display: flex; flex: 1; align-items: center; justify-content: space-between;">
+              <div class="stat-info">
+                <span class="stat-title">Puntos Totales</span>
+                <span class="stat-value skeleton-text" id="stat-total-points">0</span>
+              </div>
+              <div class="stat-divider"></div>
+              <div class="stat-info">
+                <span class="stat-title">Nivel</span>
+                <span class="stat-value text-purple skeleton-text" id="stat-level">Nivel 1</span>
+              </div>
+            </div>
+            <button class="btn-refresh" id="btn-refresh-points" title="Actualizar puntos" style="margin-left: 12px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1 2.12-9.36L23 10"/>
+              </svg>
+            </button>
           </div>
         </div>
 
         <!-- Active Session Panel -->
-        <div class="active-session-panel" id="active-session-container">
+        <div class="active-session-panel idle" id="active-session-container">
           <div class="panel-header">
-            <span class="panel-title">Automatización Activa</span>
-            <span class="badge" id="session-mode-badge">Escritorio</span>
+            <div class="panel-title-area">
+              <span class="panel-icon" id="session-icon">🤖</span>
+              <span class="panel-title" id="session-title">Automatización Activa</span>
+            </div>
+            <span class="badge" id="session-mode-badge">-</span>
           </div>
-          
+
           <div class="progress-bar-container">
             <div class="progress-info">
-              <span id="session-progress-text">0 / 30 Búsquedas</span>
+              <span id="session-progress-text">Sin sesión activa</span>
               <span id="session-percentage">0%</span>
             </div>
             <div class="progress-track">
               <div class="progress-fill" id="session-progress-fill" style="width: 0%"></div>
+              <div class="progress-shimmer" id="progress-shimmer"></div>
             </div>
           </div>
 
           <div class="session-details">
             <div class="detail-item">
               <span class="detail-label">Búsqueda Actual:</span>
-              <span class="detail-val" id="session-current-query">-</span>
+              <span class="detail-val text-muted" id="session-current-query">Esperando iniciar...</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Puntos Estimados:</span>
               <span class="detail-val text-green" id="session-estimated-points">+0 pts</span>
             </div>
+            <div class="detail-item" id="session-speed-row" style="display: none;">
+              <span class="detail-label">Velocidad:</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <svg id="speed-sparkline" width="60" height="16" style="overflow: visible; stroke: var(--primary); stroke-width: 1.5; fill: none;"></svg>
+                <span class="detail-val" id="session-speed">- búsquedas/min</span>
+              </div>
+            </div>
           </div>
 
           <div class="session-controls">
             <button class="control-btn play-btn" id="btn-pause-resume" disabled>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
               <span id="btn-pause-text">Pausar</span>
             </button>
             <button class="control-btn stop-btn" id="btn-stop" disabled>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 6h12v12H6V6z"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
               <span>Detener</span>
             </button>
           </div>
         </div>
 
-        <!-- Quick Start Launcher -->
+        <!-- Quick Launch Grid -->
         <div class="launcher-panel">
-          <h3>Inicio Rápido</h3>
+          <h3>🚀 Inicio Rápido</h3>
           <div class="launcher-grid">
-            <button class="launcher-btn" id="launch-desktop">
-              <span class="launcher-icon">💻</span>
+            <button class="launcher-btn" id="launch-desktop" data-mode="desktop">
+              <div class="launcher-icon">💻</div>
               <span class="launcher-label">Escritorio</span>
-              <span class="launcher-sub" id="lbl-desktop-count">30 búsquedas</span>
+              <span class="launcher-sub" id="lbl-desktop-count">0 / 30</span>
+              <div class="launcher-progress"><div class="launcher-progress-fill" id="progress-desktop" style="width: 0%"></div></div>
             </button>
-            <button class="launcher-btn" id="launch-mobile">
-              <span class="launcher-icon">📱</span>
+            <button class="launcher-btn" id="launch-mobile" data-mode="mobile">
+              <div class="launcher-icon">📱</div>
               <span class="launcher-label">Móvil</span>
-              <span class="launcher-sub" id="lbl-mobile-count">20 búsquedas</span>
+              <span class="launcher-sub" id="lbl-mobile-count">0 / 20</span>
+              <div class="launcher-progress"><div class="launcher-progress-fill" id="progress-mobile" style="width: 0%"></div></div>
             </button>
-            <button class="launcher-btn" id="launch-edge">
-              <span class="launcher-icon">🌐</span>
+            <button class="launcher-btn" id="launch-edge" data-mode="edge">
+              <div class="launcher-icon">🌐</div>
               <span class="launcher-label">Edge</span>
-              <span class="launcher-sub" id="lbl-edge-count">20 búsquedas</span>
+              <span class="launcher-sub" id="lbl-edge-count">0 / 20</span>
+              <div class="launcher-progress"><div class="launcher-progress-fill" id="progress-edge" style="width: 0%"></div></div>
             </button>
-          </div>
-          <button class="btn btn-primary full-width mt-3" id="launch-all">
-            🚀 Ejecutar Todos
-          </button>
-          
-          <!-- Daily Tasks Section -->
-          <div class="daily-tasks-section mt-3">
-            <div class="section-header-row">
-              <h4>🎯 Tareas Diarias</h4>
-              <span class="daily-tasks-status" id="daily-tasks-status">—</span>
-            </div>
-            <p class="text-muted text-sm mb-2">Reclama el Daily Set, More Activities, Punch Cards y Bonos de Racha</p>
-            <button class="btn btn-secondary full-width" id="launch-daily-tasks">
-              🎁 Abrir & Reclamar Tareas
+            <button class="launcher-btn launcher-btn-primary" id="launch-all">
+              <div class="launcher-icon">⚡</div>
+              <span class="launcher-label">Ejecutar Todos</span>
+              <span class="launcher-sub">Secuencial</span>
             </button>
-          </div>
-          
-          <!-- Rewards Direct Link -->
-          <div class="text-center mt-3">
-            <a href="https://rewards.bing.com" target="_blank" class="text-link">
-              Abrir Microsoft Rewards &nearr;
-            </a>
+            <button class="launcher-btn launcher-btn-gift" id="launch-daily-tasks">
+              <div class="launcher-icon">🎁</div>
+              <span class="launcher-label">Reclamar Tareas</span>
+              <span class="launcher-sub">Daily Set + Más</span>
+            </button>
           </div>
         </div>
-      </section>
 
-      <!-- Tab 2: Settings -->
-      <section id="tab-settings" class="tab-content">
+        <!-- Daily Tasks Mini Status -->
+        <div class="daily-tasks-mini">
+          <div class="daily-tasks-header">
+            <span class="daily-tasks-title">🎯 Tareas Diarias</span>
+            <span class="daily-tasks-count skeleton-text" id="daily-tasks-count">—</span>
+          </div>
+          <div class="launcher-progress" style="position: relative; height: 3px; border-radius: 2px; margin-bottom: 10px; background: var(--bg-app);">
+            <div class="launcher-progress-fill" id="progress-daily-tasks" style="width: 0%; background: linear-gradient(90deg, var(--blue), var(--purple));"></div>
+          </div>
+          <div class="daily-tasks-list" id="daily-tasks-list">
+            <div class="task-item pending skeleton-item">
+              <span class="task-icon">⏳</span>
+              <span class="task-name">Cargando tareas...</span>
+            </div>
+          </div>
+          <div style="text-align: center; margin-top: 10px;">
+            <a href="https://rewards.bing.com" target="_blank" class="text-link" id="open-rewards-link">Abrir Microsoft Rewards ↗</a>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ============ TAB: SETTINGS ============ -->
+      <div class="tab-content" id="tab-settings">
         <form id="settings-form">
+          
+          <!-- Search Counts -->
           <div class="form-group">
-            <h3>Cantidad de Búsquedas</h3>
+            <h3>🔢 Cantidad de Búsquedas</h3>
             <div class="grid-col-3">
               <div>
-                <label for="set-desktop-searches">PC</label>
-                <input type="number" id="set-desktop-searches" min="0" max="100" required>
+                <label>PC</label>
+                <input type="number" id="set-desktop-searches" min="0" max="50" value="30">
               </div>
               <div>
-                <label for="set-mobile-searches">Móvil</label>
-                <input type="number" id="set-mobile-searches" min="0" max="100" required>
+                <label>Móvil</label>
+                <input type="number" id="set-mobile-searches" min="0" max="50" value="20">
               </div>
               <div>
-                <label for="set-edge-searches">Edge</label>
-                <input type="number" id="set-edge-searches" min="0" max="100" required>
+                <label>Edge</label>
+                <input type="number" id="set-edge-searches" min="0" max="50" value="20">
               </div>
             </div>
           </div>
 
+          <!-- Timing -->
           <div class="form-group">
-            <h3>Tiempos de Espera (Segundos)</h3>
+            <h3>⏱️ Tiempos de Espera</h3>
             <div class="grid-col-2">
               <div>
-                <label for="set-min-delay">Mínimo</label>
-                <input type="number" id="set-min-delay" min="1" max="60" required>
+                <label>Mínimo (seg)</label>
+                <input type="number" id="set-min-delay" min="1" max="300" value="6">
               </div>
               <div>
-                <label for="set-max-delay">Máximo</label>
-                <input type="number" id="set-max-delay" min="2" max="120" required>
+                <label>Máximo (seg)</label>
+                <input type="number" id="set-max-delay" min="1" max="300" value="15">
               </div>
             </div>
-            <div class="flex-row justify-between mt-2">
-              <label for="set-enable-random-delay">Tiempos de Espera Aleatorios</label>
+            <div class="switch-row mt-2">
               <label class="switch">
-                <input type="checkbox" id="set-enable-random-delay">
+                <input type="checkbox" id="set-enable-random-delay" checked>
                 <span class="slider"></span>
               </label>
+              <span class="switch-label">Tiempos de espera aleatorios</span>
             </div>
             <div class="mt-2">
-              <label for="set-cooldown">Tiempo base entre búsquedas (s)</label>
-              <input type="number" id="set-cooldown" min="0" max="30" required>
+              <label>Tiempo base entre búsquedas (s)</label>
+              <input type="number" id="set-cooldown" min="1" max="60" value="2">
             </div>
           </div>
 
+          <!-- General Options -->
           <div class="form-group">
-            <h3>Opciones Generales</h3>
-            <div class="flex-row justify-between">
-              <label for="set-auto-close">Cerrar pestaña automáticamente al terminar</label>
+            <h3>⚙️ Opciones Generales</h3>
+            <div class="switch-row">
               <label class="switch">
-                <input type="checkbox" id="set-auto-close">
+                <input type="checkbox" id="set-auto-close" checked>
                 <span class="slider"></span>
               </label>
+              <span class="switch-label">Cerrar pestaña automáticamente al terminar</span>
             </div>
-            
             <div class="mt-2">
-              <label for="set-webhook-url">Webhook (Discord/Telegram) para Notificaciones:</label>
-              <input type="url" id="set-webhook-url" placeholder="https://discord.com/api/webhooks/..." style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-panel); color: var(--text-main); margin-top: 5px;">
-              <small style="color: var(--text-muted);">Recibe alertas cuando la extensión inicie, termine o falle un ciclo de tareas.</small>
+              <label>Webhook (Discord/Telegram) para Notificaciones:</label>
+              <input type="text" id="set-webhook-url" placeholder="https://discord.com/api/webhooks/..." style="width: 100%;">
+              <span class="field-hint">Recibe alertas cuando la extensión inicie, termine o falle un ciclo de tareas.</span>
             </div>
           </div>
 
+          <!-- Query Source -->
           <div class="form-group">
-            <h3>Origen de las Palabras</h3>
-            <div class="radio-group mb-2">
+            <h3>🔤 Origen de las Palabras</h3>
+            <div class="radio-group">
               <label class="radio-label">
                 <input type="radio" name="querySource" value="random" checked>
                 <span>Palabras Aleatorias Integradas</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="querySource" value="trends">
+                <span>Búsquedas Populares (Google Trends RSS)</span>
               </label>
               <label class="radio-label">
                 <input type="radio" name="querySource" value="custom">
                 <span>Palabras Personalizadas</span>
               </label>
             </div>
-            
-            <div id="custom-queries-area" style="display: none;">
-              <label for="set-custom-queries">Palabras (separadas por comas):</label>
+            <div id="custom-queries-area" style="display: none;" class="mt-2">
               <textarea id="set-custom-queries" rows="3" placeholder="palabra1, palabra2, palabra3..."></textarea>
             </div>
           </div>
 
-          <button type="submit" class="btn btn-primary full-width mt-3">Guardar Ajustes</button>
+          <button type="submit" class="btn btn-primary full-width">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            Guardar Ajustes
+          </button>
         </form>
-      </section>
+      </div>
 
-      <!-- Tab 3: Schedule -->
-      <section id="tab-schedule" class="tab-content">
+      <!-- ============ TAB: SCHEDULE ============ -->
+      <div class="tab-content" id="tab-schedule">
         <form id="schedule-form">
           <div class="form-group">
-            <div class="flex-row justify-between mb-3">
-              <h3>Habilitar Búsqueda Diaria Auto.</h3>
+            <h3>📅 Programación Automática</h3>
+            <div class="switch-row">
               <label class="switch">
                 <input type="checkbox" id="set-schedule-enabled">
                 <span class="slider"></span>
               </label>
+              <span class="switch-label">Habilitar búsqueda diaria automática</span>
             </div>
             
             <div id="schedule-config-area" style="display: none;">
-              <div class="mb-3">
-                <label for="set-schedule-time">Hora de Ejecución</label>
-                <input type="time" id="set-schedule-time" required>
+              <div class="mt-2">
+                <label>Hora de ejecución</label>
+                <input type="time" id="set-schedule-time" value="09:00">
               </div>
-
-              <label class="mb-2 block">Días Activos</label>
+              
+              <label class="mt-2 block">Días activos</label>
               <div class="days-selector">
-                <label class="day-chip"><input type="checkbox" value="Mon" checked><span>L</span></label>
-                <label class="day-chip"><input type="checkbox" value="Tue" checked><span>M</span></label>
-                <label class="day-chip"><input type="checkbox" value="Wed" checked><span>X</span></label>
-                <label class="day-chip"><input type="checkbox" value="Thu" checked><span>J</span></label>
-                <label class="day-chip"><input type="checkbox" value="Fri" checked><span>V</span></label>
-                <label class="day-chip"><input type="checkbox" value="Sat" checked><span>S</span></label>
-                <label class="day-chip"><input type="checkbox" value="Sun" checked><span>D</span></label>
+                <label class="day-chip"><input type="checkbox" value="Mon"><span>L</span></label>
+                <label class="day-chip"><input type="checkbox" value="Tue"><span>M</span></label>
+                <label class="day-chip"><input type="checkbox" value="Wed"><span>X</span></label>
+                <label class="day-chip"><input type="checkbox" value="Thu"><span>J</span></label>
+                <label class="day-chip"><input type="checkbox" value="Fri"><span>V</span></label>
+                <label class="day-chip"><input type="checkbox" value="Sat"><span>S</span></label>
+                <label class="day-chip"><input type="checkbox" value="Sun"><span>D</span></label>
               </div>
-              <p class="schedule-helper">El navegador debe estar abierto a esta hora para ejecutarse. Si está cerrado, se ejecutará cuando lo abra.</p>
+              
+              <div class="schedule-info-box">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                <span>La ejecución incluirá ±30 min de variación aleatoria para evitar detección de patrones.</span>
+              </div>
             </div>
           </div>
 
-          <button type="submit" class="btn btn-primary full-width mt-3">Guardar Horario</button>
+          <button type="submit" class="btn btn-primary full-width">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            Guardar Horario
+          </button>
         </form>
-      </section>
+      </div>
 
-      <!-- Tab 4: History -->
-      <section id="tab-history" class="tab-content">
+      <!-- ============ TAB: HISTORY ============ -->
+      <div class="tab-content" id="tab-history">
         <div class="history-header">
-          <h3>Sesiones Recientes</h3>
-          <button class="btn btn-secondary btn-sm" id="btn-clear-history">Borrar</button>
+          <h3>📊 Sesiones Recientes</h3>
+          <button class="btn btn-sm btn-secondary" id="btn-clear-history">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            Limpiar
+          </button>
         </div>
         <div class="history-list-wrapper">
           <table class="history-table">
@@ -308,20 +377,17 @@
               </tr>
             </thead>
             <tbody id="history-rows">
-              <!-- Dynamically populated -->
-              <tr>
-                <td colspan="4" class="text-center text-muted py-4">Sin historial.</td>
-              </tr>
+              <tr><td colspan="4" class="text-center text-muted py-4">Sin historial aún.</td></tr>
             </tbody>
           </table>
         </div>
-      </section>
+      </div>
 
     </main>
 
     <!-- Footer -->
     <footer class="app-footer">
-      <p>Simulando búsquedas humanas. Úselo responsablemente.</p>
+      Rewards Auto Search & Claimer v3.1 — Automatización Inteligente
     </footer>
   </div>
 

@@ -19,7 +19,6 @@ const sessionEstimatedPoints = document.getElementById('session-estimated-points
 const btnPauseResume = document.getElementById('btn-pause-resume');
 const btnPauseText = document.getElementById('btn-pause-text');
 const btnStop = document.getElementById('btn-stop');
-const globalStatus = document.getElementById('global-status');
 
 // Launcher Elements
 const btnLaunchDesktop = document.getElementById('launch-desktop');
@@ -30,6 +29,7 @@ const btnLaunchDailyTasks = document.getElementById('launch-daily-tasks');
 const lblDesktopCount = document.getElementById('lbl-desktop-count');
 const lblMobileCount = document.getElementById('lbl-mobile-count');
 const lblEdgeCount = document.getElementById('lbl-edge-count');
+const btnRefreshPoints = document.getElementById('btn-refresh-points');
 
 // Settings Form Elements
 const settingsForm = document.getElementById('settings-form');
@@ -128,7 +128,7 @@ function setupUIInteractionToggles() {
 
 // Load and populate fields
 async function loadAllData() {
-  const data = await chrome.storage.local.get(["settings", "session", "stats", "history"]);
+  const data = await chrome.storage.local.get(["settings", "session", "stats", "history", "scannedTasks"]);
   
   const settings = data.settings || {};
   const session = data.session || {};
@@ -158,15 +158,18 @@ async function loadAllData() {
     if (setWebhookUrl) setWebhookUrl.value = settings.webhookUrl || '';
     
     // Label display counts on launcher
-    if (stats.pcSearch && stats.pcSearch.max > 0) {
-      lblDesktopCount.innerText = `${stats.pcSearch.current}/${stats.pcSearch.max} pts (${Math.round(stats.pcSearch.current/3)}/${Math.round(stats.pcSearch.max/3)} búsquedas)`;
-    } else {
-      lblDesktopCount.innerText = `${settings.desktopSearches ?? 30} búsquedas`;
-    }
+    const pcMax = stats.pcSearch ? (stats.pcSearch.max || 90) : (settings.desktopSearches * 3 || 90);
+    const pcCurrent = stats.pcSearch ? (stats.pcSearch.current || 0) : 0;
+    lblDesktopCount.innerText = `${pcCurrent}/${pcMax} pts (${Math.round(pcCurrent/3)}/${Math.round(pcMax/3)} búsquedas)`;
+    updateLauncherProgress('desktop', pcCurrent, pcMax);
+    updateLauncherCompletion('desktop', pcCurrent, pcMax);
 
+    const mobileMax = stats.mobileSearch ? (stats.mobileSearch.max || 60) : (settings.mobileSearches * 3 || 60);
+    const mobileCurrent = stats.mobileSearch ? (stats.mobileSearch.current || 0) : 0;
+    
     if (lblMobileCount) {
       if (stats.mobileSearch && stats.mobileSearch.max > 0) {
-        lblMobileCount.innerText = `${stats.mobileSearch.current}/${stats.mobileSearch.max} pts (${Math.round(stats.mobileSearch.current/3)}/${Math.round(stats.mobileSearch.max/3)} búsquedas)`;
+        lblMobileCount.innerText = `${mobileCurrent}/${mobileMax} pts (${Math.round(mobileCurrent/3)}/${Math.round(mobileMax/3)} búsquedas)`;
         if (btnLaunchMobile && (!session || session.status === "idle" || session.status === "stopped")) {
           btnLaunchMobile.disabled = false;
           btnLaunchMobile.style.opacity = "1";
@@ -178,14 +181,27 @@ async function loadAllData() {
           btnLaunchMobile.style.opacity = "0.5";
         }
       } else {
-        lblMobileCount.innerText = `${settings.mobileSearches ?? 20} búsquedas`;
+        lblMobileCount.innerText = `${mobileCurrent}/${mobileMax} pts (${Math.round(mobileCurrent/3)}/${Math.round(mobileMax/3)} búsquedas)`;
       }
+      updateLauncherProgress('mobile', mobileCurrent, mobileMax);
+      updateLauncherCompletion('mobile', mobileCurrent, mobileMax);
     }
 
-    if (stats.edgeSearch && stats.edgeSearch.max > 0) {
-      lblEdgeCount.innerText = `${stats.edgeSearch.current}/${stats.edgeSearch.max} pts (${Math.round(stats.edgeSearch.current/3)}/${Math.round(stats.edgeSearch.max/3)} búsquedas)`;
-    } else {
-      lblEdgeCount.innerText = `${settings.edgeSearches ?? 20} búsquedas`;
+    const edgeMax = stats.edgeSearch ? (stats.edgeSearch.max || 60) : (settings.edgeSearches * 3 || 60);
+    const edgeCurrent = stats.edgeSearch ? (stats.edgeSearch.current || 0) : 0;
+    lblEdgeCount.innerText = `${edgeCurrent}/${edgeMax} pts (${Math.round(edgeCurrent/3)}/${Math.round(edgeMax/3)} búsquedas)`;
+    updateLauncherProgress('edge', edgeCurrent, edgeMax);
+    updateLauncherCompletion('edge', edgeCurrent, edgeMax);
+
+    // Update Circular Progress Rings
+    const totalMaxSearchPoints = pcMax + mobileMax + edgeMax;
+    updateCircularProgress('ring-today', stats.todayPoints || 0, totalMaxSearchPoints || 210);
+
+    // Update Weekly Streak mini-bar
+    const streakBar = document.getElementById('streak-bar');
+    if (streakBar) {
+      const streakPct = Math.min((stats.streak / 7) * 100, 100);
+      streakBar.style.width = `${streakPct}%`;
     }
 
     // Query source selection
@@ -211,8 +227,15 @@ async function loadAllData() {
   // Render History Table
   renderHistory(history);
 
+  // Render Daily Tasks Status list from storage
+  updateDailyTasksUI(data.scannedTasks);
+
   // Initial dashboard sync
   updateDashboardState(session, stats);
+
+  // Remove skeleton classes once loaded
+  document.querySelectorAll('.skeleton-text').forEach(el => el.classList.remove('skeleton-text'));
+  document.querySelectorAll('.skeleton-item').forEach(el => el.classList.remove('skeleton-item'));
 }
 
 // Render history rows
@@ -243,15 +266,179 @@ function renderHistory(history) {
 
 // Update dashboard states periodically
 async function updateDashboard() {
-  const data = await chrome.storage.local.get(["session", "stats"]);
+  const data = await chrome.storage.local.get(["session", "stats", "scannedTasks"]);
   updateDashboardState(data.session, data.stats);
+  updateDailyTasksUI(data.scannedTasks);
+}
+
+// Update circular progress ring offset
+function updateCircularProgress(elementId, value, max) {
+  const circle = document.getElementById(elementId);
+  if (!circle) return;
+  
+  const circumference = 2 * Math.PI * 42; // r=42
+  const percent = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  const offset = circumference - (percent / 100) * circumference;
+  
+  circle.style.strokeDasharray = `${circumference}`;
+  circle.style.strokeDashoffset = offset;
+  
+  // Color based on completion
+  if (percent >= 100) {
+    circle.style.stroke = '#10b981';
+  } else if (percent >= 50) {
+    circle.style.stroke = '#f59e0b';
+  } else {
+    circle.style.stroke = '#3b82f6';
+  }
+}
+
+// Update launcher progress bar fill
+function updateLauncherProgress(mode, current, max) {
+  const fill = document.getElementById(`progress-${mode}`);
+  if (!fill) return;
+  
+  const percent = max > 0 ? Math.min((current / max) * 100, 100) : 0;
+  fill.style.width = `${percent}%`;
+  
+  if (percent >= 100) {
+    fill.style.background = 'linear-gradient(90deg, #10b981, #34d399)';
+  } else {
+    fill.style.background = 'linear-gradient(90deg, #3b82f6, #60a5fa)';
+  }
+}
+
+// Update session panel with visual classes
+function updateSessionVisualState(session) {
+  const panel = document.getElementById('active-session-container');
+  const icon = document.getElementById('session-icon');
+  const title = document.getElementById('session-title');
+  
+  if (!panel) return;
+  
+  panel.classList.remove('running', 'paused', 'idle');
+  
+  if (session.status === 'running') {
+    panel.classList.add('running');
+    if (icon) icon.innerText = '⚡';
+    if (title) title.innerText = 'Automatización Activa';
+  } else if (session.status === 'paused') {
+    panel.classList.add('paused');
+    if (icon) icon.innerText = '⏸️';
+    if (title) title.innerText = 'Automatización Pausada';
+  } else {
+    panel.classList.add('idle');
+    if (icon) icon.innerText = '🤖';
+    if (title) title.innerText = 'Automatización Inactiva';
+  }
+}
+
+// Render Daily Tasks mini status checklist
+function updateDailyTasksUI(scannedTasks) {
+  const list = document.getElementById('daily-tasks-list');
+  const countBadge = document.getElementById('daily-tasks-count');
+  if (!list) return;
+  
+  if (!scannedTasks || (!scannedTasks.dailySet && !scannedTasks.moreActivities && !scannedTasks.punchCards)) {
+    list.innerHTML = `
+      <div class="task-item pending">
+        <span class="task-icon">⏳</span>
+        <span class="task-name">Daily Set (No detectado)</span>
+      </div>
+      <div class="task-item pending">
+        <span class="task-icon">⏳</span>
+        <span class="task-name">More Activities (No detectado)</span>
+      </div>
+      <div class="task-item pending">
+        <span class="task-icon">⏳</span>
+        <span class="task-name">Punch Cards (No detectado)</span>
+      </div>
+    `;
+    if (countBadge) {
+      countBadge.classList.remove('skeleton-text');
+      countBadge.innerText = '—';
+    }
+    const dailyBar = document.getElementById('progress-daily-tasks');
+    if (dailyBar) dailyBar.style.width = '0%';
+    return;
+  }
+  
+  const dailySet = scannedTasks.dailySet || [];
+  const moreActivities = scannedTasks.moreActivities || [];
+  const punchCards = scannedTasks.punchCards || [];
+  
+  const totalTasks = dailySet.length + moreActivities.length + punchCards.length;
+  const completedTasks = dailySet.filter(t => t.completed).length +
+                         moreActivities.filter(t => t.completed).length +
+                         punchCards.filter(t => t.completed).length;
+
+  const dailyPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const dailyBar = document.getElementById('progress-daily-tasks');
+  if (dailyBar) {
+    dailyBar.style.width = `${dailyPct}%`;
+  }
+  
+  if (countBadge) {
+    countBadge.classList.remove('skeleton-text');
+    countBadge.innerText = `${completedTasks}/${totalTasks}`;
+    if (completedTasks === totalTasks && totalTasks > 0) {
+      countBadge.style.color = '#10b981';
+      countBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+    } else {
+      countBadge.style.color = '#f59e0b';
+      countBadge.style.background = 'rgba(245, 158, 11, 0.1)';
+    }
+  }
+  
+  // Build Daily Set item
+  const dsPending = dailySet.filter(t => !t.completed).length;
+  const dsText = dailySet.length === 0 ? "Daily Set (No detectado)" : `Daily Set (${dailySet.length - dsPending}/${dailySet.length})`;
+  const dsClass = dailySet.length === 0 ? "pending" : (dsPending === 0 ? "completed" : "pending");
+  const dsIcon = dailySet.length === 0 ? "⏳" : (dsPending === 0 ? "✅" : "⏳");
+  
+  // Build More Activities item
+  const maPending = moreActivities.filter(t => !t.completed).length;
+  const maText = moreActivities.length === 0 ? "More Activities (No detectado)" : `More Activities (${moreActivities.length - maPending}/${moreActivities.length})`;
+  const maClass = moreActivities.length === 0 ? "pending" : (maPending === 0 ? "completed" : "pending");
+  const maIcon = moreActivities.length === 0 ? "⏳" : (maPending === 0 ? "✅" : "⏳");
+  
+  // Build Punch Cards item
+  const pcPending = punchCards.filter(t => !t.completed).length;
+  const pcText = punchCards.length === 0 ? "Punch Cards (No detectado)" : `Punch Cards (${punchCards.length - pcPending}/${punchCards.length})`;
+  const pcClass = punchCards.length === 0 ? "pending" : (pcPending === 0 ? "completed" : "pending");
+  const pcIcon = punchCards.length === 0 ? "⏳" : (pcPending === 0 ? "✅" : "⏳");
+  
+  list.innerHTML = `
+    <div class="task-item ${dsClass}">
+      <span class="task-icon">${dsIcon}</span>
+      <span class="task-name">${dsText}</span>
+    </div>
+    <div class="task-item ${maClass}">
+      <span class="task-icon">${maIcon}</span>
+      <span class="task-name">${maText}</span>
+    </div>
+    <div class="task-item ${pcClass}">
+      <span class="task-icon">${pcIcon}</span>
+      <span class="task-name">${pcText}</span>
+    </div>
+  `;
 }
 
 // Update dashboard state DOM
 function updateDashboardState(session, stats) {
+  updateSessionVisualState(session);
+
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+
   if (!session || session.status === "idle" || session.status === "completed" || session.status === "stopped") {
     // Idle state
-    activeSessionContainer.classList.add('idle');
+    lastDisplayedQuery = "";
+    if (statusDot) {
+      statusDot.className = 'status-dot';
+    }
+    if (statusText) statusText.innerText = 'Listo';
+    
     sessionModeBadge.className = "badge";
     sessionModeBadge.innerText = "-";
     sessionProgressText.innerText = "Sin sesión activa";
@@ -265,8 +452,10 @@ function updateDashboardState(session, stats) {
     btnPauseText.innerText = "Pausar";
     btnStop.disabled = true;
     
-    globalStatus.innerHTML = `<span class="status-dot"></span><span class="status-label">Inactivo</span>`;
-    
+    // Hide speed graph
+    const speedRow = document.getElementById('session-speed-row');
+    if (speedRow) speedRow.style.display = 'none';
+
     // Enable launchers
     btnLaunchDesktop.disabled = false;
     if (btnLaunchMobile) {
@@ -282,8 +471,6 @@ function updateDashboardState(session, stats) {
   }
 
   // Active running/paused state
-  activeSessionContainer.classList.remove('idle');
-  
   let translatedMode = session.mode === 'desktop' ? 'Escritorio' : (session.mode === 'mobile' ? 'Móvil' : 'Edge');
   sessionModeBadge.innerText = translatedMode;
   sessionModeBadge.className = `badge running`;
@@ -294,7 +481,12 @@ function updateDashboardState(session, stats) {
   sessionProgressFill.style.width = `${pct}%`;
   
   const currentQuery = session.queries[session.currentIndex] || "Buscando...";
-  sessionCurrentQuery.innerText = currentQuery;
+  if (currentQuery !== lastDisplayedQuery) {
+    lastDisplayedQuery = currentQuery;
+    typeWriter(sessionCurrentQuery, currentQuery);
+  } else if (!sessionCurrentQuery.innerText || sessionCurrentQuery.innerText === "Esperando iniciar...") {
+    sessionCurrentQuery.innerText = currentQuery;
+  }
   sessionCurrentQuery.className = "detail-val";
   sessionEstimatedPoints.innerText = `+${session.pointsEarned} pts`;
   
@@ -303,12 +495,18 @@ function updateDashboardState(session, stats) {
   
   if (session.status === "paused") {
     btnPauseText.innerText = "Reanudar";
-    btnPauseResume.querySelector('svg').innerHTML = `<path d="M8 5v14l11-7z"/>`; // Play icon
-    globalStatus.innerHTML = `<span class="status-dot orange"></span><span class="status-label">Pausado</span>`;
+    btnPauseResume.querySelector('svg').innerHTML = `<polygon points="5 3 19 12 5 21 5 3"></polygon>`; // Play icon in new SVG format
+    if (statusDot) {
+      statusDot.className = 'status-dot orange';
+    }
+    if (statusText) statusText.innerText = 'Pausado';
   } else {
     btnPauseText.innerText = "Pausar";
-    btnPauseResume.querySelector('svg').innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; // Pause icon
-    globalStatus.innerHTML = `<span class="status-dot green"></span><span class="status-label">Corriendo (${translatedMode})</span>`;
+    btnPauseResume.querySelector('svg').innerHTML = `<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>`; // Pause icon in new SVG format
+    if (statusDot) {
+      statusDot.className = 'status-dot green';
+    }
+    if (statusText) statusText.innerText = `Corriendo (${translatedMode})`;
   }
 
   // Disable launchers
@@ -316,6 +514,26 @@ function updateDashboardState(session, stats) {
   if (btnLaunchMobile) btnLaunchMobile.disabled = true;
   btnLaunchEdge.disabled = true;
   btnLaunchAll.disabled = true;
+
+  // Speed and Sparkline updates
+  const speedRow = document.getElementById('session-speed-row');
+  const speedVal = document.getElementById('session-speed');
+  if (session.startTime && session.completedSearches > 0) {
+    const elapsedMin = (Date.now() - session.startTime) / 60000;
+    const speed = elapsedMin > 0 ? (session.completedSearches / elapsedMin) : 0;
+    if (speedRow && speedVal) {
+      speedRow.style.display = 'flex';
+      speedVal.innerText = `${speed.toFixed(1)} búsquedas/min`;
+      
+      if (session.speedHistory && session.speedHistory.length > 0) {
+        renderSpeedSparkline(session.speedHistory);
+      } else {
+        renderSpeedSparkline([speed, speed]);
+      }
+    }
+  } else {
+    if (speedRow) speedRow.style.display = 'none';
+  }
 }
 
 // Bind Action Listeners
@@ -353,13 +571,38 @@ function setupActionListeners() {
         if (response && response.success) {
           showToast("Abriendo Rewards para reclamar tareas...");
           btnLaunchDailyTasks.disabled = true;
-          btnLaunchDailyTasks.innerText = "⏳ Procesando...";
+          btnLaunchDailyTasks.innerHTML = `
+            <div class="spinner-mini"></div>
+            <span class="launcher-label">Procesando...</span>
+            <span class="launcher-sub">Reclamando set</span>
+          `;
           setTimeout(() => {
             btnLaunchDailyTasks.disabled = false;
-            btnLaunchDailyTasks.innerText = "🎁 Abrir & Reclamar Tareas";
+            btnLaunchDailyTasks.innerHTML = `
+              <div class="launcher-icon">🎁</div>
+              <span class="launcher-label">Reclamar Tareas</span>
+              <span class="launcher-sub">Daily Set + Más</span>
+            `;
           }, 35000);
         } else {
           showToast(response?.error || "Error al abrir Rewards", true);
+        }
+      });
+    });
+  }
+
+  // Refresh Points Button
+  if (btnRefreshPoints) {
+    btnRefreshPoints.addEventListener('click', () => {
+      btnRefreshPoints.classList.add('spinning');
+      showToast("Sincronizando puntos con Microsoft...");
+      chrome.runtime.sendMessage({ action: "syncPoints" }, (response) => {
+        btnRefreshPoints.classList.remove('spinning');
+        if (response && response.success) {
+          loadAllData();
+          showToast("✅ Puntos actualizados");
+        } else {
+          showToast("⚠️ No se pudieron actualizar los puntos", true);
         }
       });
     });
@@ -502,4 +745,82 @@ function showToast(message, isError = false) {
       toast.remove();
     }, 300);
   }, 2500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VISUAL ENHANCEMENTS & HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+let currentTypewriterInterval = null;
+let lastDisplayedQuery = "";
+
+// Typewriter effect for query display
+function typeWriter(element, text, speed = 40) {
+  if (currentTypewriterInterval) clearInterval(currentTypewriterInterval);
+  element.innerText = "";
+  element.classList.add("typing");
+  let i = 0;
+  currentTypewriterInterval = setInterval(() => {
+    if (i < text.length) {
+      element.innerText += text.charAt(i);
+      i++;
+    } else {
+      clearInterval(currentTypewriterInterval);
+      element.classList.remove("typing");
+    }
+  }, speed);
+}
+
+// Render dynamic sparkline speed graph using SVG path
+function renderSpeedSparkline(history) {
+  const svg = document.getElementById('speed-sparkline');
+  if (!svg) return;
+  svg.innerHTML = '';
+  
+  if (!history || history.length < 2) return;
+  
+  const width = 60;
+  const height = 16;
+  const maxVal = Math.max(...history, 10);
+  const minVal = Math.min(...history, 0);
+  const range = maxVal - minVal || 1;
+  
+  const points = history.map((val, index) => {
+    const x = (index / (history.length - 1)) * width;
+    const y = height - ((val - minVal) / range) * height;
+    return `${x},${y}`;
+  });
+  
+  const pathData = `M ${points.join(' L ')}`;
+  
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', pathData);
+  path.setAttribute('stroke', 'var(--primary)');
+  path.setAttribute('stroke-width', '1.5');
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  
+  svg.appendChild(path);
+}
+
+// Update launcher completion indicator checks
+function updateLauncherCompletion(mode, current, max) {
+  const btn = document.getElementById(`launch-${mode}`);
+  if (!btn) return;
+  let indicator = btn.querySelector('.completion-indicator');
+  if (!indicator) {
+    indicator = document.createElement('span');
+    indicator.className = 'completion-indicator';
+    btn.appendChild(indicator);
+  }
+  if (max > 0 && current >= max) {
+    indicator.className = 'completion-indicator completed';
+    indicator.innerText = '✓';
+    btn.classList.add('completed');
+  } else {
+    indicator.className = 'completion-indicator pending';
+    indicator.innerText = '○';
+    btn.classList.remove('completed');
+  }
 }

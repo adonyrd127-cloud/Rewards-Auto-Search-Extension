@@ -84,8 +84,8 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     }
 
     // No se encontró la sección Daily Set
-    console.log(`${TAG} No se pudo localizar la sección Daily Set. Usando document.body como fallback.`);
-    return document.body;
+    console.log(`${TAG} No se pudo localizar la sección Daily Set. Retornando null.`);
+    return null;
   }
 
   /**
@@ -139,11 +139,17 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    * @returns {Array<{title: string, points: string, type: string, completed: boolean, element: Element, url: string}>}
    */
   async function scan() {
-    console.log(`${TAG} Iniciando escaneo global de Tareas (React-Aria)...`);
+    console.log(`${TAG} Iniciando escaneo de Daily Set...`);
+
+    const section = _findDailySetSection();
+    if (!section) {
+      console.log(`${TAG} Sección Daily Set no encontrada.`);
+      return [];
+    }
 
     const cardSelectors = 'a.group\\/ctrl.cursor-pointer[href]';
-    let cards = document.querySelectorAll(cardSelectors);
-    console.log(`${TAG} Enlaces encontrados: ${cards.length}`);
+    let cards = section.querySelectorAll(cardSelectors);
+    console.log(`${TAG} Enlaces encontrados en la sección Daily Set: ${cards.length}`);
 
     const tasks = [];
     const seenUrls = new Set();

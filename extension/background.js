@@ -2,8 +2,8 @@
 importScripts('words.js');
 
 // Constants
-const EDGE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.69";
-const MOBILE_UA = "Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36";
+const EDGE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.2592.81";
+const MOBILE_UA = "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
 const BING_SEARCH_URL = "https://www.bing.com/search?q=";
 
 // Default configuration
@@ -70,8 +70,67 @@ chrome.runtime.onInstalled.addListener(async () => {
   updateScheduleAlarm();
 });
 
+// State for sequential task tab tracking
+let activeTaskTabId = null;
+let dashboardTabId = null;
+
+// Track task tab creation
+chrome.tabs.onCreated.addListener((tab) => {
+  if (dashboardTabId && !activeTaskTabId) {
+    if (tab.openerTabId === dashboardTabId || (tab.pendingUrl && /bing\.com|microsoft\.com/i.test(tab.pendingUrl))) {
+      activeTaskTabId = tab.id;
+      console.log(`[RewardsBot][background] Registered active task tab: ${tab.id} opened by dashboard: ${dashboardTabId}`);
+    }
+  }
+});
+
+// Track task tab removal/closing
+chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+  if (tabId === activeTaskTabId) {
+    console.log(`[RewardsBot][background] Active task tab ${tabId} closed.`);
+    activeTaskTabId = null;
+    if (dashboardTabId) {
+      chrome.tabs.sendMessage(dashboardTabId, { action: "taskTabClosed", tabId }).catch(() => {
+        // Dashboard tab might have been closed or reloaded, ignore
+      });
+    }
+  }
+});
+
 // Listener for runtime messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "prepareForTaskTab") {
+    dashboardTabId = sender.tab?.id;
+    activeTaskTabId = null;
+    console.log(`[RewardsBot][background] Preparing for task tab from dashboard: ${dashboardTabId}`);
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.action === "closeMyTab") {
+    const tabId = sender.tab?.id;
+    if (tabId) {
+      console.log(`[RewardsBot][background] Closing task tab: ${tabId}`);
+      chrome.tabs.remove(tabId);
+      sendResponse({ success: true });
+    } else {
+      sendResponse({ success: false, error: "No tab ID found" });
+    }
+    return true;
+  }
+
+  if (message.action === "captchaDetected") {
+    pauseSearchSession().then(() => {
+      showNotification(
+        "⚠️ CAPTCHA Detectado",
+        "Se requiere intervención humana para resolver el reto. La sesión de búsqueda se ha pausado."
+      );
+      sendWebhookNotification("⚠️ **CAPTCHA Detectado**: Se requiere intervención humana. La sesión de búsqueda se ha pausado.");
+      sendResponse({ success: true });
+    });
+    return true; // async response
+  }
+
   if (message.action === "startSession") {
     startSearchSession(message.mode, message.queue || [])
       .then(() => sendResponse({ success: true }))
@@ -235,13 +294,14 @@ async function setUserAgentRule(mode) {
       { header: "User-Agent", operation: "set", value: EDGE_UA },
       { header: "Sec-CH-UA-Mobile", operation: "set", value: "?0" },
       { header: "Sec-CH-UA-Platform", operation: "set", value: "\"Windows\"" },
-      { header: "Sec-CH-UA", operation: "set", value: "\"Not)A;Brand\";v=\"99\", \"Microsoft Edge\";v=\"116\", \"Chromium\";v=\"116\"" }
+      { header: "Sec-CH-UA", operation: "set", value: "\"Not)A;Brand\";v=\"99\", \"Microsoft Edge\";v=\"126\", \"Chromium\";v=\"126\"" }
     ];
   } else if (mode === "mobile") {
     requestHeaders = [
       { header: "User-Agent", operation: "set", value: MOBILE_UA },
       { header: "Sec-CH-UA-Mobile", operation: "set", value: "?1" },
-      { header: "Sec-CH-UA-Platform", operation: "set", value: "\"Android\"" }
+      { header: "Sec-CH-UA-Platform", operation: "set", value: "\"Android\"" },
+      { header: "Sec-CH-UA", operation: "set", value: "\"Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"126\", \"Chromium\";v=\"126\"" }
     ];
   }
 
@@ -265,14 +325,58 @@ async function setUserAgentRule(mode) {
   });
 }
 
+// Fetch Google Trends RSS feed and parse queries using regex
+async function fetchTrendingQueries() {
+  try {
+    const res = await fetch("https://trends.google.com/trending/rss?geo=US");
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    const text = await res.text();
+    
+    // Google Trends RSS items format: <item><title>Query</title>...</item>
+    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+    const titleRegex = /<title>([\s\S]*?)<\/title>/;
+    
+    const queries = [];
+    let match;
+    while ((match = itemRegex.exec(text)) !== null) {
+      const itemContent = match[1];
+      const titleMatch = titleRegex.exec(itemContent);
+      if (titleMatch && titleMatch[1]) {
+        const query = titleMatch[1]
+          .replace(/&amp;/g, '&')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .trim();
+        if (query) {
+          queries.push(query);
+        }
+      }
+    }
+    console.log(`[Google Trends] Fetched ${queries.length} trending queries.`);
+    return queries;
+  } catch (error) {
+    console.error("[Google Trends] Error fetching trending queries:", error);
+    return [];
+  }
+}
+
 // Generate search queries
-function generateQueries(source, count, customQueriesRaw) {
+async function generateQueries(source, count, customQueriesRaw) {
   let list = [];
   if (source === "custom" && customQueriesRaw.trim()) {
     list = customQueriesRaw.split(",").map(q => q.trim()).filter(q => q.length > 0);
+  } else if (source === "trends") {
+    console.log("[Google Trends] Using trending queries...");
+    const trends = await fetchTrendingQueries();
+    list = trends;
   }
   
   if (list.length < count) {
+    console.log("[Google Trends] Enriching queries list with local fallback topics...");
     const topics = self.SEARCH_TOPICS || ["microsoft rewards", "bing search", "google vs bing", "xbox games"];
     const shuffled = [...topics].sort(() => 0.5 - Math.random());
     
@@ -357,7 +461,7 @@ async function startSearchSession(mode, queue = []) {
     }
   }
 
-  const queries = generateQueries(settings.querySource, count, settings.customQueries);
+  const queries = await generateQueries(settings.querySource, count, settings.customQueries);
   
   const newSession = {
     status: "running",
@@ -368,7 +472,9 @@ async function startSearchSession(mode, queue = []) {
     currentIndex: 0,
     queries: queries,
     tabId: null,
-    modesQueue: queue
+    modesQueue: queue,
+    startTime: Date.now(),
+    speedHistory: []
   };
 
   await sendWebhookNotification(`▶️ Iniciando búsquedas en modo **${mode.toUpperCase()}** (${newSession.totalSearches} búsquedas). Queue restante: ${queue.length > 0 ? queue.join(", ") : "Ninguna"}`);
@@ -391,7 +497,7 @@ async function runSessionLoop(session) {
 
     // Create the search tab
     const tab = await chrome.tabs.create({
-      url: "https://www.bing.com",
+      url: "https://www.bing.com/#ua=" + session.mode,
       active: false // runs in background
     });
     
@@ -419,7 +525,7 @@ async function runSessionLoop(session) {
       console.log(`Searching [${session.currentIndex + 1}/${session.totalSearches}]: ${query}`);
 
       // Simulate human typing by executing a script in the Bing tab
-      const searchUrl = BING_SEARCH_URL + encodeURIComponent(query);
+      const searchUrl = BING_SEARCH_URL + encodeURIComponent(query) + "#ua=" + session.mode;
       
       try {
         await chrome.scripting.executeScript({
@@ -487,6 +593,17 @@ async function runSessionLoop(session) {
       session.currentIndex++;
       session.pointsEarned += 3; // Bing Rewards: 3 points per search
 
+      // Calculate speed and save to history
+      if (session.startTime) {
+        const elapsedMin = (Date.now() - session.startTime) / 60000;
+        const currentSpeed = elapsedMin > 0 ? (session.completedSearches / elapsedMin) : 0;
+        if (!session.speedHistory) session.speedHistory = [];
+        session.speedHistory.push(parseFloat(currentSpeed.toFixed(1)));
+        if (session.speedHistory.length > 10) {
+          session.speedHistory.shift();
+        }
+      }
+
       await chrome.storage.local.set({ session });
       notifyPopup();
 
@@ -495,11 +612,22 @@ async function runSessionLoop(session) {
         break;
       }
 
-      // Calculate delay
-      let delayMs = settings.cooldownBetweenSearches * 1000;
-      if (settings.enableRandomDelay) {
-        const rand = Math.floor(Math.random() * (settings.maxDelay - settings.minDelay + 1)) + settings.minDelay;
-        delayMs += rand * 1000;
+      // Calculate delay using a non-uniform distribution:
+      // 70% short (7-15s), 22% medium (15-28s), 8% coffee breaks (45-75s)
+      let delaySec = 0;
+      const randRoll = Math.random() * 100;
+      if (randRoll < 70) {
+        delaySec = Math.floor(Math.random() * (15 - 7 + 1)) + 7;
+      } else if (randRoll < 92) {
+        delaySec = Math.floor(Math.random() * (28 - 15 + 1)) + 15;
+      } else {
+        delaySec = Math.floor(Math.random() * (75 - 45 + 1)) + 45;
+        console.log(`[Smart Delay] Taking a coffee break: ${delaySec}s`);
+      }
+
+      let delayMs = delaySec * 1000;
+      if (settings.cooldownBetweenSearches) {
+        delayMs += settings.cooldownBetweenSearches * 1000;
       }
 
       // Wait the delay in small increments to support rapid pause/stop responsiveness
@@ -598,6 +726,7 @@ async function pauseSearchSession() {
   const session = data.session;
   if (session && session.status === "running") {
     session.status = "paused";
+    session.pausedTime = Date.now();
     await chrome.storage.local.set({ session });
     notifyPopup();
   }
@@ -609,6 +738,11 @@ async function resumeSearchSession() {
   const session = data.session;
   if (session && session.status === "paused") {
     session.status = "running";
+    if (session.pausedTime) {
+      const pauseDuration = Date.now() - session.pausedTime;
+      session.startTime = (session.startTime || Date.now()) + pauseDuration;
+      delete session.pausedTime;
+    }
     await chrome.storage.local.set({ session });
     notifyPopup();
   }
@@ -1053,39 +1187,98 @@ async function syncUserInfo() {
     realStreak = domStreak;
   }
 
-  // Standard PC Search
-  let pcCurrent = 0, pcMax = 0;
+  // Raw API/counter detection
+  let apiPcCurrent = 0, apiPcMax = 0, apiPcFound = false;
   if (counters.pcSearch && counters.pcSearch[0]) {
-    pcCurrent = counters.pcSearch[0].pointProgress || 0;
-    pcMax = counters.pcSearch[0].pointProgressMax || 0;
-  } else if (prevStats.pcSearch) {
-    pcCurrent = prevStats.pcSearch.current; pcMax = prevStats.pcSearch.max;
+    apiPcCurrent = counters.pcSearch[0].pointProgress || 0;
+    apiPcMax = counters.pcSearch[0].pointProgressMax || 0;
+    apiPcFound = true;
   }
 
-  // Edge Search
-  let edgeCurrent = 0, edgeMax = 0;
+  let apiEdgeCurrent = 0, apiEdgeMax = 0, apiEdgeFound = false;
   if (counters.pcSearch && counters.pcSearch[1]) {
-    edgeCurrent = counters.pcSearch[1].pointProgress || 0;
-    edgeMax = counters.pcSearch[1].pointProgressMax || 0;
+    apiEdgeCurrent = counters.pcSearch[1].pointProgress || 0;
+    apiEdgeMax = counters.pcSearch[1].pointProgressMax || 0;
+    apiEdgeFound = true;
   } else if (counters.edgeSearch && counters.edgeSearch[0]) {
-    edgeCurrent = counters.edgeSearch[0].pointProgress || 0;
-    edgeMax = counters.edgeSearch[0].pointProgressMax || 0;
-  } else if (prevStats.edgeSearch) {
-    edgeCurrent = prevStats.edgeSearch.current; edgeMax = prevStats.edgeSearch.max;
+    apiEdgeCurrent = counters.edgeSearch[0].pointProgress || 0;
+    apiEdgeMax = counters.edgeSearch[0].pointProgressMax || 0;
+    apiEdgeFound = true;
   }
 
-  // Mobile Search
-  let mobileCurrent = 0, mobileMax = 0;
+  let apiMobileCurrent = 0, apiMobileMax = 0, apiMobileFound = false;
   if (counters.mobileSearch && counters.mobileSearch[0]) {
-    mobileCurrent = counters.mobileSearch[0].pointProgress || 0;
-    mobileMax = counters.mobileSearch[0].pointProgressMax || 0;
+    apiMobileCurrent = counters.mobileSearch[0].pointProgress || 0;
+    apiMobileMax = counters.mobileSearch[0].pointProgressMax || 0;
+    apiMobileFound = true;
   } else if (counters.mobileSearch && counters.mobileSearch.length > 0) {
-    mobileCurrent = counters.mobileSearch[counters.mobileSearch.length-1].pointProgress || 0;
-    mobileMax = counters.mobileSearch[counters.mobileSearch.length-1].pointProgressMax || 0;
-  } else if (!counters.mobileSearch && pcMax > 0 && pcMax <= 60) {
+    apiMobileCurrent = counters.mobileSearch[counters.mobileSearch.length - 1].pointProgress || 0;
+    apiMobileMax = counters.mobileSearch[counters.mobileSearch.length - 1].pointProgressMax || 0;
+    apiMobileFound = true;
+  }
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isToday = prevStats.lastUpdatedDate === todayStr;
+
+  let pcCurrent = 0, pcMax = 90;
+  let edgeCurrent = 0, edgeMax = 60;
+  let mobileCurrent = 0, mobileMax = 60;
+
+  if (isToday) {
+    // If lastUpdatedDate is today, only update if the new points from the API are >= the cached points.
+    // We never reset pcSearch/edgeSearch/mobileSearch current/max points to 0 if the API returns 0 or empty counters.
+    
+    // PC Search
+    const prevPcCurrent = prevStats.pcSearch ? (prevStats.pcSearch.current || 0) : 0;
+    const prevPcMax = prevStats.pcSearch ? (prevStats.pcSearch.max || 90) : 90;
+    pcCurrent = (apiPcFound && apiPcCurrent >= prevPcCurrent) ? apiPcCurrent : prevPcCurrent;
+    pcMax = (apiPcFound && apiPcMax > 0) ? apiPcMax : prevPcMax;
+
+    // Edge Search
+    const prevEdgeCurrent = prevStats.edgeSearch ? (prevStats.edgeSearch.current || 0) : 0;
+    const prevEdgeMax = prevStats.edgeSearch ? (prevStats.edgeSearch.max || 60) : 60;
+    edgeCurrent = (apiEdgeFound && apiEdgeCurrent >= prevEdgeCurrent) ? apiEdgeCurrent : prevEdgeCurrent;
+    edgeMax = (apiEdgeFound && apiEdgeMax > 0) ? apiEdgeMax : prevEdgeMax;
+
+    // Mobile Search
+    const prevMobileCurrent = prevStats.mobileSearch ? (prevStats.mobileSearch.current || 0) : 0;
+    const prevMobileMax = prevStats.mobileSearch ? (prevStats.mobileSearch.max || 60) : 60;
+    mobileCurrent = (apiMobileFound && apiMobileCurrent >= prevMobileCurrent) ? apiMobileCurrent : prevMobileCurrent;
+    mobileMax = (apiMobileFound && apiMobileMax > 0) ? apiMobileMax : prevMobileMax;
+  } else {
+    // The day has changed. We can reset points to 0, but we preserve/default max points if API returns 0.
+    
+    // PC Search
+    if (apiPcFound) {
+      pcCurrent = apiPcCurrent;
+      pcMax = apiPcMax > 0 ? apiPcMax : (prevStats.pcSearch?.max || 90);
+    } else {
+      pcCurrent = 0;
+      pcMax = prevStats.pcSearch?.max || 90;
+    }
+
+    // Edge Search
+    if (apiEdgeFound) {
+      edgeCurrent = apiEdgeCurrent;
+      edgeMax = apiEdgeMax > 0 ? apiEdgeMax : (prevStats.edgeSearch?.max || 60);
+    } else {
+      edgeCurrent = 0;
+      edgeMax = prevStats.edgeSearch?.max || 60;
+    }
+
+    // Mobile Search
+    if (apiMobileFound) {
+      mobileCurrent = apiMobileCurrent;
+      mobileMax = apiMobileMax > 0 ? apiMobileMax : (prevStats.mobileSearch?.max || 60);
+    } else {
+      mobileCurrent = 0;
+      mobileMax = prevStats.mobileSearch?.max || 60;
+    }
+  }
+
+  // Final check: if mobile search is not found in API and pcMax <= 60, mobile search is not available.
+  if (!apiMobileFound && pcMax > 0 && pcMax <= 60) {
     mobileMax = 0;
-  } else if (prevStats.mobileSearch && (!counters.mobileSearch || counters.mobileSearch.length === 0)) {
-    mobileCurrent = prevStats.mobileSearch.current; mobileMax = prevStats.mobileSearch.max;
   }
 
   const stats = {
