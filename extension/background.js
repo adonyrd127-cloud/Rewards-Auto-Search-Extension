@@ -524,8 +524,7 @@ async function runSessionLoop(session) {
       const query = session.queries[session.currentIndex];
       console.log(`Searching [${session.currentIndex + 1}/${session.totalSearches}]: ${query}`);
 
-      // Simulate human typing by executing a script in the Bing tab
-      const searchUrl = BING_SEARCH_URL + encodeURIComponent(query) + "#ua=" + session.mode;
+      const searchUrl = BING_SEARCH_URL + encodeURIComponent(query) + "&form=QBRE#ua=" + session.mode;
       
       try {
         await chrome.scripting.executeScript({
