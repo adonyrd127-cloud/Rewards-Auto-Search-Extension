@@ -1463,3 +1463,5 @@ input:checked + .slider::before {
   padding-top: 40px;
 }
 
+/* Note: Floating panel styles are injected inline within content.js to preserve extension packaging structure */
+

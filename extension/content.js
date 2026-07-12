@@ -23,17 +23,22 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
     }
   });
 
-  // Escuchar cambios en stats para actualizar el panel flotante
+  // Escuchar cambios en stats y session para actualizar el panel flotante
   chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'local' && changes.stats && changes.stats.newValue) {
-      const newStats = changes.stats.newValue;
-      if (newStats.todayPoints !== undefined) {
-        const pointsContainer = document.getElementById('rap-header-points-container');
-        const pointsValue = document.getElementById('rap-header-points-value');
-        if (pointsContainer && pointsValue) {
-          pointsContainer.style.display = 'flex';
-          pointsValue.innerText = newStats.todayPoints;
+    if (namespace === 'local') {
+      if (changes.stats && changes.stats.newValue) {
+        const newStats = changes.stats.newValue;
+        if (newStats.todayPoints !== undefined) {
+          const pointsContainer = document.getElementById('rap-header-points-container');
+          const pointsValue = document.getElementById('rap-header-points-value');
+          if (pointsContainer && pointsValue) {
+            pointsContainer.style.display = 'flex';
+            pointsValue.innerText = newStats.todayPoints;
+          }
         }
+      }
+      if (changes.session) {
+        updateActivityDot();
       }
     }
   });
@@ -373,20 +378,29 @@ function injectStyles() {
       width: 340px;
       max-height: 85vh;
       background: ${THEME.bg};
-      backdrop-filter: blur(20px) saturate(1.5);
-      -webkit-backdrop-filter: blur(20px) saturate(1.5);
+      backdrop-filter: blur(12px) saturate(1.5);
+      -webkit-backdrop-filter: blur(12px) saturate(1.5);
       border: 1px solid ${THEME.panelBorder};
-      border-radius: 16px;
+      border-radius: 12px;
       box-shadow: 
-        0 25px 50px -12px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(255, 255, 255, 0.05),
-        0 0 40px rgba(16, 185, 129, 0.08);
+        0 0 0 1px rgba(255,255,255,0.05),
+        0 4px 6px -1px rgba(0,0,0,0.3),
+        0 20px 40px -10px rgba(0,0,0,0.5),
+        0 0 80px -20px rgba(16, 185, 129, 0.08);
       z-index: 999999;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, box-shadow 0.3s ease;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
       animation: panelSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #rewards-auto-panel.all-complete {
+      box-shadow: 
+        0 0 0 1px rgba(251, 191, 36, 0.2),
+        0 0 25px rgba(251, 191, 36, 0.4),
+        0 20px 40px -10px rgba(0,0,0,0.5);
+      border-color: rgba(251, 191, 36, 0.6) !important;
     }
 
     #rewards-auto-panel.minimized {
@@ -621,6 +635,27 @@ function injectStyles() {
       border-color: rgba(16, 185, 129, 0.3);
     }
 
+    /* Collapsed sections badges (Mejora 5) */
+    .rap-section:not(.expanded) .rap-section-badge {
+      background: rgba(245, 158, 11, 0.15) !important;
+      color: #f59e0b !important;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+      border: none !important;
+    }
+    .rap-section:not(.expanded) .rap-section-badge.done {
+      background: rgba(16, 185, 129, 0.15) !important;
+      color: #10b981 !important;
+    }
+    .rap-section:not(.expanded) .rap-section-badge:not(.done):not(.empty)::after {
+      content: ' ⏳';
+    }
+    .rap-section:not(.expanded) .rap-section-badge.done::after {
+      content: ' ✅';
+    }
+
     .rap-section-toggle {
       color: ${THEME.textDim};
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -674,7 +709,7 @@ function injectStyles() {
       background: rgba(255,255,255,0.02);
       border-radius: 10px;
       border: 1px solid transparent;
-      transition: all 0.25s ease;
+      transition: all 0.2s ease;
       cursor: pointer;
       position: relative;
     }
@@ -692,22 +727,31 @@ function injectStyles() {
       border-radius: 10px 0 0 10px;
     }
 
-    .rap-task-item:hover {
-      background: rgba(255,255,255,0.04);
-      border-color: rgba(255,255,255,0.08);
-      transform: translateX(2px);
-    }
-
-    .rap-task-item:hover::before {
-      opacity: 0.5;
+    .rap-task-item.pending {
+      border-left: 3px solid #F59E0B; /* Ámbar para pendientes */
+      padding-left: 8px;
     }
 
     .rap-task-item.completed {
-      opacity: 0.6;
+      border-left: 3px solid #10B981; /* Verde para completadas */
+      padding-left: 8px;
+      opacity: 0.5;
+    }
+
+    .rap-task-item.pending:hover {
+      background: rgba(255,255,255,0.05);
+      transform: translateX(4px);
+    }
+
+    .rap-task-item.completed:hover {
+      transform: none;
+      background: rgba(255,255,255,0.02);
     }
 
     .rap-task-item.completed .rap-task-title {
       text-decoration: line-through;
+      text-decoration-color: #10B981;
+      text-decoration-thickness: 2px;
       color: ${THEME.textDim};
     }
 
@@ -1019,6 +1063,135 @@ function injectStyles() {
       from { opacity: 1; transform: translateX(0); }
       to { opacity: 0; transform: translateX(30px); }
     }
+
+    /* General progress styles (Mejora 1 & 7) */
+    .rap-general-progress-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid ${THEME.panelBorder};
+      border-radius: 10px;
+      margin-bottom: 2px;
+      flex-shrink: 0;
+    }
+    .rap-general-progress-track {
+      flex: 1;
+      height: 6px;
+      background: #1f2937;
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .rap-general-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #34d399);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 8px rgba(52, 211, 153, 0.3);
+    }
+    .rap-general-progress-text {
+      font-size: 10px;
+      font-weight: 700;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+    .rap-general-progress-fill.all-complete {
+      background: #fbbf24 !important;
+      box-shadow: 0 0 12px rgba(251, 191, 36, 0.6) !important;
+    }
+    @keyframes shimmer {
+      0% { background-position: -200% center; }
+      100% { background-position: 200% center; }
+    }
+    .rap-general-progress-fill.all-complete-shimmer {
+      background: linear-gradient(90deg, #10B981, #34D399, #FBBF24, #34D399, #10B981) !important;
+      background-size: 200% 100% !important;
+      animation: shimmer 2s ease infinite !important;
+    }
+
+    /* Activity dot styles (Mejora 2) */
+    .rap-activity-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #4b5563;
+      display: inline-block;
+      margin-left: 8px;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease;
+      vertical-align: middle;
+    }
+    .rap-activity-dot.active {
+      background-color: #10b979;
+      box-shadow: 0 0 8px #10b979;
+      animation: pulse-dot 2s infinite;
+    }
+    .rap-activity-dot.error {
+      background-color: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.5; }
+    }
+
+    /* Sparkle float emoji style (Mejora 7) */
+    .rap-sparkle-emoji {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 20px;
+      pointer-events: none;
+      animation: float-sparkle 2.5s ease-out forwards;
+      z-index: 1000;
+    }
+    @keyframes float-sparkle {
+      0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+      20% { transform: translate(-50%, -15px) scale(1.2); opacity: 1; }
+      80% { transform: translate(-50%, -30px) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -45px) scale(0.8); opacity: 0; }
+    }
+
+    /* Refresh button styles (Mejora 8) */
+    .rap-refresh-btn {
+      background: none;
+      border: 1px solid ${THEME.panelBorder};
+      border-radius: 6px;
+      padding: 4px 8px;
+      color: ${THEME.textMuted};
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.2s ease;
+    }
+    .rap-refresh-btn:hover {
+      background: rgba(255,255,255,0.05);
+      color: ${THEME.textMain};
+      border-color: rgba(255,255,255,0.15);
+    }
+    .rap-refresh-btn:hover .refresh-icon {
+      transform: rotate(180deg);
+    }
+    .rap-refresh-btn .refresh-icon {
+      transition: transform 0.4s ease;
+      display: block;
+    }
+    .rap-refresh-btn.scanning .refresh-icon {
+      animation: spin 1s linear infinite !important;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -1041,7 +1214,7 @@ function initRewardsPanel() {
     <div class="rap-header-brand">
       <div class="rap-header-icon">⭐</div>
       <div>
-        <span class="rap-header-title">Rewards <span>Auto</span></span>
+        <span class="rap-header-title">Rewards <span>Auto</span><span class="rap-activity-dot" id="rap-activity-dot"></span></span>
         <span class="rap-header-version">v4.1.0</span>
       </div>
     </div>
@@ -1086,7 +1259,13 @@ function initRewardsPanel() {
       <span>Reclamar Todo Automáticamente</span>
     </button>
     <div class="rap-footer-meta">
-      <span id="rap-last-update">Último escaneo: --</span>
+      <button class="rap-refresh-btn" id="rap-last-update">
+        <svg class="refresh-icon" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 4v6h-6M1 20v-6h6"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        <span class="refresh-text">Escanear</span>
+      </button>
       <span>Rewards Auto v4.1.0</span>
     </div>
   `;
@@ -1110,16 +1289,25 @@ function initRewardsPanel() {
   setupPanelEvents(panel, header);
   renderSections();
 
+  const refreshBtn = panel.querySelector('#rap-last-update');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', triggerManualScan);
+  }
+
   // Cargar puntos de almacenamiento local de inmediato
   chrome.storage.local.get("stats", (res) => {
+    let initialPoints = 0;
     if (res && res.stats && res.stats.todayPoints !== undefined && res.stats.todayPoints > 0) {
       const pointsContainer = document.getElementById('rap-header-points-container');
       const pointsValue = document.getElementById('rap-header-points-value');
       if (pointsContainer && pointsValue) {
         pointsContainer.style.display = 'flex';
         pointsValue.innerText = res.stats.todayPoints;
+        initialPoints = res.stats.todayPoints;
       }
     }
+    setupPointsObserver(initialPoints);
+    updateActivityDot();
   });
 
   // Iniciar escaneo de tareas
@@ -1225,6 +1413,17 @@ function renderSections() {
 
   body.innerHTML = '';
 
+  // Prepend General Progress Container (Mejora 1)
+  const progressContainer = document.createElement('div');
+  progressContainer.className = 'rap-general-progress-container';
+  progressContainer.innerHTML = `
+    <div class="rap-general-progress-track">
+      <div class="rap-general-progress-fill" id="rap-general-progress-fill"></div>
+    </div>
+    <span class="rap-general-progress-text" id="rap-general-progress-text">Cargando...</span>
+  `;
+  body.appendChild(progressContainer);
+
   // Daily Set
   body.appendChild(createSection('dailySet', {
     icon: '🎯',
@@ -1254,6 +1453,9 @@ function renderSections() {
 
   // Streak Bonus
   body.appendChild(createStreakSection());
+
+  // Update General Progress (Mejora 1)
+  updateGeneralProgress();
 }
 
 // Crear Sección Común
@@ -1265,6 +1467,7 @@ function createSection(key, config) {
   const completedCount = tasks.filter(t => t.completed).length;
   const totalCount = tasks.length;
   const allDone = totalCount > 0 && completedCount === totalCount;
+  const isEmpty = totalCount === 0;
 
   const section = document.createElement('div');
   section.className = `rap-section ${isExpanded ? 'expanded' : ''}`;
@@ -1281,7 +1484,7 @@ function createSection(key, config) {
       <span class="rap-section-title">${config.title}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
-      <span class="rap-section-badge ${allDone ? 'done' : ''}">${completedCount}/${totalCount || 0}</span>
+      <span class="rap-section-badge ${allDone ? 'done' : ''} ${isEmpty ? 'empty' : ''}">${completedCount}/${totalCount || 0}</span>
       <svg class="rap-section-toggle" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
@@ -1457,6 +1660,7 @@ function updateStatus(text, type = 'info') {
   if (bar && textEl) {
     bar.className = `rap-status-bar ${type}`;
     textEl.textContent = text;
+    updateActivityDot();
   }
 }
 
@@ -1644,10 +1848,16 @@ async function updateStatusBar() {
   }
 
   // Actualizar timestamp de último escaneo
-  const meta = document.getElementById('rap-last-update');
-  if (meta) {
-    meta.textContent = `Último escaneo: ${new Date().toLocaleTimeString()}`;
+  const metaText = document.querySelector('#rap-last-update .refresh-text');
+  const metaBtn = document.getElementById('rap-last-update');
+  if (metaText && metaBtn && !metaBtn.classList.contains('scanning')) {
+    const timeStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    metaText.textContent = `Último: ${timeStr}`;
   }
+
+  // Update general progress and activity dot
+  updateGeneralProgress();
+  updateActivityDot();
 
   // Extraer Puntos de Hoy del DOM (siempre, independientemente del estado de tareas)
   try {
@@ -2119,4 +2329,172 @@ function solveActiveTasks() {
   }
 
   console.log("[RewardsBot] No se detectaron widgets activos en esta página.");
+}
+
+// ============================================================
+// HELPERS PARA MEJORAS VISUALES Y DE UX (v4.1.0)
+// ============================================================
+
+let rapAllCompleteTriggered = false;
+
+function updateGeneralProgress() {
+  const fill = document.getElementById('rap-general-progress-fill');
+  const text = document.getElementById('rap-general-progress-text');
+  if (!fill || !text) return;
+
+  const sections = panelState.sections;
+  const total = Object.keys(sections).reduce((sum, key) => {
+    if (key === 'streakBonus') {
+      return sum + (sections[key].data?.bonusAvailable ? 1 : 0);
+    }
+    return sum + (sections[key].tasks?.length || 0);
+  }, 0);
+
+  const completed = Object.keys(sections).reduce((sum, key) => {
+    if (key === 'streakBonus') {
+      return sum + (sections[key].data && !sections[key].data.bonusAvailable ? 1 : 0);
+    }
+    return sum + (sections[key].tasks?.filter(t => t.completed).length || 0);
+  }, 0);
+
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  fill.style.width = `${pct}%`;
+  text.textContent = `${completed}/${total} tareas (${pct}%)`;
+
+  const isDone = total > 0 && completed === total;
+  if (isDone) {
+    fill.classList.add('all-complete');
+    text.style.color = '#fbbf24';
+
+    if (!rapAllCompleteTriggered) {
+      rapAllCompleteTriggered = true;
+      const panel = document.getElementById('rewards-auto-panel');
+      if (panel) {
+        panel.classList.add('all-complete');
+        fill.classList.add('all-complete-shimmer');
+
+        const header = panel.querySelector('.rap-header');
+        if (header) {
+          const sparkle = document.createElement('span');
+          sparkle.className = 'rap-sparkle-emoji';
+          sparkle.textContent = '✨';
+          header.appendChild(sparkle);
+          setTimeout(() => sparkle.remove(), 2500);
+        }
+
+        setTimeout(() => {
+          panel.classList.remove('all-complete');
+          fill.classList.remove('all-complete-shimmer');
+        }, 3000);
+      }
+    }
+  } else {
+    fill.classList.remove('all-complete');
+    fill.classList.remove('all-complete-shimmer');
+    text.style.color = '';
+    rapAllCompleteTriggered = false;
+  }
+}
+
+async function updateActivityDot() {
+  const dot = document.getElementById('rap-activity-dot');
+  if (!dot) return;
+
+  const isLocalProcessing = Object.values(panelState.sections).some(s => 
+    (s.tasks || []).some(t => t.processing)
+  );
+
+  let isSessionRunning = false;
+  try {
+    const res = await chrome.storage.local.get("session");
+    if (res && res.session && res.session.status === "running") {
+      isSessionRunning = true;
+    }
+  } catch (e) {}
+
+  const isWorking = isLocalProcessing || isSessionRunning;
+
+  const statusBar = document.getElementById('rap-status-bar');
+  const isError = statusBar && statusBar.classList.contains('error');
+
+  if (isError) {
+    dot.className = 'rap-activity-dot error';
+  } else if (isWorking) {
+    dot.className = 'rap-activity-dot active';
+  } else {
+    dot.className = 'rap-activity-dot';
+  }
+}
+
+function animateCounter(element, start, end, duration, onComplete) {
+  const startTime = performance.now();
+  function update(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 4);
+    element.textContent = Math.round(start + (end - start) * eased);
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    } else {
+      element.textContent = end;
+      if (onComplete) onComplete();
+    }
+  }
+  requestAnimationFrame(update);
+}
+
+let rapPointsObserver = null;
+function setupPointsObserver(initialVal) {
+  const pointsValue = document.getElementById('rap-header-points-value');
+  if (!pointsValue) return;
+
+  let lastValue = initialVal;
+
+  if (rapPointsObserver) rapPointsObserver.disconnect();
+
+  rapPointsObserver = new MutationObserver((mutations) => {
+    const newValue = parseInt(pointsValue.textContent, 10);
+    if (isNaN(newValue) || newValue === lastValue) return;
+
+    if (pointsValue.isAnimating) {
+      lastValue = newValue;
+      return;
+    }
+
+    const start = lastValue;
+    const end = newValue;
+    lastValue = newValue;
+
+    pointsValue.isAnimating = true;
+    animateCounter(pointsValue, start, end, 800, () => {
+      pointsValue.isAnimating = false;
+    });
+  });
+
+  rapPointsObserver.observe(pointsValue, { characterData: true, childList: true, subtree: true });
+}
+
+async function triggerManualScan() {
+  const btn = document.getElementById('rap-last-update');
+  if (!btn || btn.classList.contains('scanning')) return;
+
+  btn.classList.add('scanning');
+  const textEl = btn.querySelector('.refresh-text');
+  if (textEl) textEl.textContent = 'Escaneando...';
+
+  updateActivityDot();
+
+  try {
+    await runFullScan();
+  } catch (e) {
+    console.error("[RewardsBot] Manual scan failed:", e);
+  } finally {
+    btn.classList.remove('scanning');
+    if (textEl) {
+      const timeStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      textEl.textContent = `Último: ${timeStr}`;
+    }
+    updateActivityDot();
+  }
 }
