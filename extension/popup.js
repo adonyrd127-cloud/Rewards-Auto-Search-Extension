@@ -22,20 +22,17 @@ const btnStop = document.getElementById('btn-stop');
 
 // Launcher Elements
 const btnLaunchDesktop = document.getElementById('launch-desktop');
-const btnLaunchMobile = document.getElementById('launch-mobile');
-const btnLaunchEdge = document.getElementById('launch-edge');
+// Mobile elements removed
 const btnLaunchAll = document.getElementById('launch-all');
 const btnLaunchDailyTasks = document.getElementById('launch-daily-tasks');
 const lblDesktopCount = document.getElementById('lbl-desktop-count');
-const lblMobileCount = document.getElementById('lbl-mobile-count');
-const lblEdgeCount = document.getElementById('lbl-edge-count');
+// Mobile label count removed
 const btnRefreshPoints = document.getElementById('btn-refresh-points');
 
 // Settings Form Elements
 const settingsForm = document.getElementById('settings-form');
 const setDesktopSearches = document.getElementById('set-desktop-searches');
-const setMobileSearches = document.getElementById('set-mobile-searches');
-const setEdgeSearches = document.getElementById('set-edge-searches');
+// Mobile settings input removed
 const setMinDelay = document.getElementById('set-min-delay');
 const setMaxDelay = document.getElementById('set-max-delay');
 const setEnableRandomDelay = document.getElementById('set-enable-random-delay');
@@ -57,8 +54,21 @@ const dayCheckboxes = document.querySelectorAll('.days-selector input');
 const historyRows = document.getElementById('history-rows');
 const btnClearHistory = document.getElementById('btn-clear-history');
 
+// Activity Log Elements (Mejora 4D)
+const activityHeaderToggle = document.getElementById('activity-header-toggle');
+const activityLogBody = document.getElementById('activity-log-body');
+const activityLogContent = document.getElementById('activity-log-content');
+const activityArrow = document.getElementById('activity-arrow');
+
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
+  // Refrescar automáticamente si hay cambios en background
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.stats) {
+      loadAllData();
+    }
+  });
+
   // Bind Tab Click Handlers
   tabButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -69,6 +79,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load configuration and data
   await loadAllData();
+
+  // Load and render activity logs (Mejora 4D)
+  const logsData = await chrome.storage.local.get(["activityLog", "activityPanelExpanded"]);
+  renderActivityLogs(logsData.activityLog || []);
+  if (logsData.activityPanelExpanded && activityLogBody && activityArrow) {
+    activityLogBody.classList.add('expanded');
+    activityArrow.innerText = '▲';
+  }
+
+  // Bind Activity Log expand/collapse toggle
+  if (activityHeaderToggle) {
+    activityHeaderToggle.addEventListener('click', async () => {
+      const isExpanded = activityLogBody.classList.contains('expanded');
+      if (isExpanded) {
+        activityLogBody.classList.remove('expanded');
+        activityArrow.innerText = '▼';
+        await chrome.storage.local.set({ activityPanelExpanded: false });
+      } else {
+        activityLogBody.classList.add('expanded');
+        activityArrow.innerText = '▲';
+        setTimeout(() => {
+          activityLogContent.scrollTop = activityLogContent.scrollHeight;
+        }, 350);
+        await chrome.storage.local.set({ activityPanelExpanded: true });
+      }
+    });
+  }
 
   // Bind Form toggles
   setupUIInteractionToggles();
@@ -96,6 +133,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       showToast(`${message.mode.toUpperCase()} omitido: ¡Búsquedas ya completadas hoy!`, false);
       updateDashboard();
       loadAllData();
+    }
+    if (message.action === "activityLogUpdate" && message.logEntry) {
+      appendLogEntryToUI(message.logEntry);
     }
   });
 });
@@ -148,8 +188,7 @@ async function loadAllData() {
   // Pre-populate settings form
   if (settings) {
     setDesktopSearches.value = settings.desktopSearches ?? 30;
-    setMobileSearches.value = settings.mobileSearches ?? 20;
-    setEdgeSearches.value = settings.edgeSearches ?? 20;
+    // Mobile settings prepopulate removed
     setMinDelay.value = settings.minDelay ?? 6;
     setMaxDelay.value = settings.maxDelay ?? 15;
     setEnableRandomDelay.checked = settings.enableRandomDelay ?? true;
@@ -164,38 +203,12 @@ async function loadAllData() {
     updateLauncherProgress('desktop', pcCurrent, pcMax);
     updateLauncherCompletion('desktop', pcCurrent, pcMax);
 
-    const mobileMax = stats.mobileSearch ? (stats.mobileSearch.max || 60) : (settings.mobileSearches * 3 || 60);
-    const mobileCurrent = stats.mobileSearch ? (stats.mobileSearch.current || 0) : 0;
-    
-    if (lblMobileCount) {
-      if (stats.mobileSearch && stats.mobileSearch.max > 0) {
-        lblMobileCount.innerText = `${mobileCurrent}/${mobileMax} pts (${Math.round(mobileCurrent/3)}/${Math.round(mobileMax/3)} búsquedas)`;
-        if (btnLaunchMobile && (!session || session.status === "idle" || session.status === "stopped")) {
-          btnLaunchMobile.disabled = false;
-          btnLaunchMobile.style.opacity = "1";
-        }
-      } else if (stats.lastUpdatedDate && stats.mobileSearch && stats.mobileSearch.max === 0) {
-        lblMobileCount.innerText = "No disponible (Nivel)";
-        if (btnLaunchMobile) {
-          btnLaunchMobile.disabled = true;
-          btnLaunchMobile.style.opacity = "0.5";
-        }
-      } else {
-        lblMobileCount.innerText = `${mobileCurrent}/${mobileMax} pts (${Math.round(mobileCurrent/3)}/${Math.round(mobileMax/3)} búsquedas)`;
-      }
-      updateLauncherProgress('mobile', mobileCurrent, mobileMax);
-      updateLauncherCompletion('mobile', mobileCurrent, mobileMax);
-    }
+    // Mobile count label and progress removed
 
-    const edgeMax = stats.edgeSearch ? (stats.edgeSearch.max || 60) : (settings.edgeSearches * 3 || 60);
-    const edgeCurrent = stats.edgeSearch ? (stats.edgeSearch.current || 0) : 0;
-    lblEdgeCount.innerText = `${edgeCurrent}/${edgeMax} pts (${Math.round(edgeCurrent/3)}/${Math.round(edgeMax/3)} búsquedas)`;
-    updateLauncherProgress('edge', edgeCurrent, edgeMax);
-    updateLauncherCompletion('edge', edgeCurrent, edgeMax);
 
     // Update Circular Progress Rings
-    const totalMaxSearchPoints = pcMax + mobileMax + edgeMax;
-    updateCircularProgress('ring-today', stats.todayPoints || 0, totalMaxSearchPoints || 210);
+    const totalMaxSearchPoints = pcMax;
+    updateCircularProgress('ring-today', stats.todayPoints || 0, totalMaxSearchPoints || 90);
 
     // Update Weekly Streak mini-bar
     const streakBar = document.getElementById('streak-bar');
@@ -433,6 +446,7 @@ function updateDashboardState(session, stats) {
 
   if (!session || session.status === "idle" || session.status === "completed" || session.status === "stopped") {
     // Idle state
+    document.body.className = "mode-idle";
     lastDisplayedQuery = "";
     if (statusDot) {
       statusDot.className = 'status-dot';
@@ -452,26 +466,22 @@ function updateDashboardState(session, stats) {
     btnPauseText.innerText = "Pausar";
     btnStop.disabled = true;
     
-    // Hide speed graph
+    // Hide speed graph and tabs row
     const speedRow = document.getElementById('session-speed-row');
     if (speedRow) speedRow.style.display = 'none';
+    const tabsRow = document.getElementById('session-tabs-row');
+    if (tabsRow) tabsRow.style.display = 'none';
 
     // Enable launchers
     btnLaunchDesktop.disabled = false;
-    if (btnLaunchMobile) {
-      if (stats && stats.mobileSearch && stats.mobileSearch.max === 0) {
-        btnLaunchMobile.disabled = true;
-      } else {
-        btnLaunchMobile.disabled = false;
-      }
-    }
-    btnLaunchEdge.disabled = false;
+    // Mobile launch button enablement removed
     btnLaunchAll.disabled = false;
     return;
   }
 
   // Active running/paused state
-  let translatedMode = session.mode === 'desktop' ? 'Escritorio' : (session.mode === 'mobile' ? 'Móvil' : 'Edge');
+  document.body.className = session.mode === 'desktop' ? 'mode-desktop' : 'mode-edge';
+  let translatedMode = session.mode === 'desktop' ? 'Escritorio' : 'Edge';
   sessionModeBadge.innerText = translatedMode;
   sessionModeBadge.className = `badge running`;
   
@@ -511,8 +521,8 @@ function updateDashboardState(session, stats) {
 
   // Disable launchers
   btnLaunchDesktop.disabled = true;
-  if (btnLaunchMobile) btnLaunchMobile.disabled = true;
-  btnLaunchEdge.disabled = true;
+  // Mobile launcher disabled status removed
+
   btnLaunchAll.disabled = true;
 
   // Speed and Sparkline updates
@@ -534,14 +544,26 @@ function updateDashboardState(session, stats) {
   } else {
     if (speedRow) speedRow.style.display = 'none';
   }
+
+  // Tabs opened updates
+  const tabsRow = document.getElementById('session-tabs-row');
+  const tabsVal = document.getElementById('session-tabs-count');
+  if (tabsRow && tabsVal) {
+    const tabsCount = (session.openedTabIds || []).length;
+    if (tabsCount > 0) {
+      tabsRow.style.display = 'flex';
+      tabsVal.innerText = tabsCount;
+    } else {
+      tabsRow.style.display = 'none';
+    }
+  }
 }
 
 // Bind Action Listeners
 function setupActionListeners() {
   // Launchers
   btnLaunchDesktop.addEventListener('click', () => triggerLaunch('desktop'));
-  if (btnLaunchMobile) btnLaunchMobile.addEventListener('click', () => triggerLaunch('mobile'));
-  btnLaunchEdge.addEventListener('click', () => triggerLaunch('edge'));
+  // Mobile launcher listener removed
   
   btnLaunchAll.addEventListener('click', async () => {
     const data = await chrome.storage.local.get("settings");
@@ -549,11 +571,7 @@ function setupActionListeners() {
     
     const queue = [];
     const desktopSearches = settings.desktopSearches ?? 30;
-    const mobileSearches = settings.mobileSearches ?? 20;
-    const edgeSearches = settings.edgeSearches ?? 20;
-    
-    if (edgeSearches > 0) queue.push('edge');
-    if (mobileSearches > 0) queue.unshift('mobile'); // Ensure queue is mobile -> edge
+    // Mobile search count queueing removed
     
     if (desktopSearches > 0) {
       triggerLaunch('desktop', queue);
@@ -608,6 +626,8 @@ function setupActionListeners() {
     });
   }
 
+
+
   // Session Controls
   btnPauseResume.addEventListener('click', async () => {
     const data = await chrome.storage.local.get("session");
@@ -630,8 +650,7 @@ function setupActionListeners() {
     
     const updatedSettings = {
       desktopSearches: parseInt(setDesktopSearches.value) || 0,
-      mobileSearches: parseInt(setMobileSearches.value) || 0,
-      edgeSearches: parseInt(setEdgeSearches.value) || 0,
+      // Mobile searches save removed
       minDelay: parseInt(setMinDelay.value) || 6,
       maxDelay: parseInt(setMaxDelay.value) || 15,
       enableRandomDelay: setEnableRandomDelay.checked,
@@ -823,4 +842,45 @@ function updateLauncherCompletion(mode, current, max) {
     indicator.innerText = '○';
     btn.classList.remove('completed');
   }
+}
+
+// Render all activity logs in the UI (Mejora 4D)
+function renderActivityLogs(logs) {
+  if (!activityLogContent) return;
+  
+  if (!logs || logs.length === 0) {
+    activityLogContent.innerHTML = '<div class="log-empty-msg">Sin actividad reciente.</div>';
+    return;
+  }
+  
+  activityLogContent.innerHTML = logs.map(log => formatLogEntry(log)).join('');
+  activityLogContent.scrollTop = activityLogContent.scrollHeight;
+}
+
+// Appends a single log entry to the UI in real-time (Mejora 4D)
+function appendLogEntryToUI(logEntry) {
+  if (!activityLogContent) return;
+  
+  // Remove empty message if it exists
+  const emptyMsg = activityLogContent.querySelector('.log-empty-msg');
+  if (emptyMsg) {
+    emptyMsg.remove();
+  }
+  
+  // Create element and append
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = formatLogEntry(logEntry);
+  activityLogContent.appendChild(tempDiv.firstElementChild);
+  
+  // Scroll to bottom
+  activityLogContent.scrollTop = activityLogContent.scrollHeight;
+}
+
+// Formats a log string into CSS-styled HTML (Mejora 4D)
+function formatLogEntry(logStr) {
+  const match = logStr.match(/^\[(.*?)\] (.*)$/);
+  if (match) {
+    return `<div class="log-entry"><span class="log-time">[${match[1]}]</span>${match[2]}</div>`;
+  }
+  return `<div class="log-entry">${logStr}</div>`;
 }

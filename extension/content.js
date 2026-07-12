@@ -22,6 +22,21 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
       return true;
     }
   });
+
+  // Escuchar cambios en stats para actualizar el panel flotante
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.stats && changes.stats.newValue) {
+      const newStats = changes.stats.newValue;
+      if (newStats.todayPoints !== undefined) {
+        const pointsContainer = document.getElementById('rap-header-points-container');
+        const pointsValue = document.getElementById('rap-header-points-value');
+        if (pointsContainer && pointsValue) {
+          pointsContainer.style.display = 'flex';
+          pointsValue.innerText = newStats.todayPoints;
+        }
+      }
+    }
+  });
 }
 
 function waitForTaskTabClose(timeoutMs = 60000) {
@@ -187,67 +202,92 @@ if (isSearchPage) {
     console.log("[RewardsBot] Referrer es rewards.bing.com. Marcando pestaña en sessionStorage: isRewardsTaskTab = true");
   }
 
-  // Leer sesión de chrome.storage.local para verificar estado
-  chrome.storage.local.get("session", (data) => {
-    const session = data.session || {};
-    const isRunning = session.status === "running";
+  // ─────────────────────────────────────────────────────────────────────────
+  // GUARD CLAUSE — Tab Identity Check (prevents interference in user's tabs)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Before executing ANY automation (scroll, clicks, quiz solving), we ask the
+  // background service worker whether THIS tab's tabId is in the set of tabs
+  // that the extension itself created for automation. If not, we abort
+  // completely. This prevents the bug where a user's manual Bing search tab
+  // gets scrolled/clicked by the automation running in a different tab.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  chrome.runtime.sendMessage({ action: "isAutomationTab" }, (response) => {
+    const isAutomationTab = response && response.isAutomation;
     const isRewardsTask = sessionStorage.getItem("isRewardsTaskTab") === "true";
 
-    console.log(`[RewardsBot] Bing Search Page. Estado sesión: ${session.status}, isRewardsTaskTab: ${isRewardsTask}`);
-
-    if (isRunning || isRewardsTask) {
-      console.log("[RewardsBot] Condición cumplida (sesión activa o tarea de Rewards). Iniciando auto-solver y lectura...");
-      setTimeout(solveActiveTasks, 2500);
-      
-      // Simular lectura aleatoria para parecer más humano (solo 50% de las veces)
-      if (Math.random() > 0.5) {
-        setTimeout(() => {
-          if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateReading) {
-            window.RewardsUtils.Human.simulateReading();
-          }
-        }, 1500);
-      }
-
-      // Si es una tarea de rewards, iniciar el monitoreo para cerrar la pestaña cuando termine
-      if (isRewardsTask) {
-        console.log("[RewardsBot] Tarea de Rewards detectada en pestaña. Iniciando monitoreo de ciclo de vida...");
-        setTimeout(() => {
-          if (isQuizOrPollPresent()) {
-            console.log("[RewardsBot] Quiz o Poll detectado. Monitoreando resolución...");
-            let lastActionTime = Date.now();
-            let totalElapsed = 0;
-            
-            const updateAction = () => {
-              lastActionTime = Date.now();
-            };
-            document.addEventListener("click", updateAction);
-
-            const interval = setInterval(() => {
-              totalElapsed += 2000;
-              const quizActive = isQuizOrPollPresent();
-              const idleTime = Date.now() - (window.lastRewardsActionTime || lastActionTime);
-
-              console.log(`[RewardsBot] Monitoreo de Quiz: activo=${quizActive}, inactivo por=${Math.round(idleTime/1000)}s, total=${Math.round(totalElapsed/1000)}s`);
-
-              if ((!quizActive && idleTime > 8000) || idleTime > 25000 || totalElapsed > 90000) {
-                console.log("[RewardsBot] El quiz/poll ha terminado o se alcanzó el timeout. Cerrando pestaña...");
-                clearInterval(interval);
-                document.removeEventListener("click", updateAction);
-                chrome.runtime.sendMessage({ action: "closeMyTab" });
-              }
-            }, 2000);
-          } else {
-            console.log("[RewardsBot] Tarea de visita simple detectada. Programando cierre en 10s...");
-            setTimeout(() => {
-              console.log("[RewardsBot] 10s transcurridos. Cerrando pestaña de visita...");
-              chrome.runtime.sendMessage({ action: "closeMyTab" });
-            }, 10000);
-          }
-        }, 3500);
-      }
-    } else {
-      console.log("[RewardsBot] Auto-solver y lectura omitidos: la sesión no está activa y no es una tarea de Rewards.");
+    // Allow automation ONLY if:
+    // 1. The background confirms this tab is an automation tab, OR
+    // 2. This tab was opened directly from a rewards.bing.com task click (per-tab sessionStorage)
+    if (!isAutomationTab && !isRewardsTask) {
+      console.log("[RewardsBot] ⛔ This tab is NOT an automation tab. Skipping all automation (scroll, clicks, quiz solver). User's browsing will not be interrupted.");
+      return; // ABORT — do nothing in this tab
     }
+
+    console.log(`[RewardsBot] ✅ This tab IS an automation tab (isAutomationTab=${isAutomationTab}, isRewardsTask=${isRewardsTask}). Proceeding with automation.`);
+
+    // From here on, we know this is a tab the extension controls.
+    // Read session state for additional context.
+    chrome.storage.local.get("session", (data) => {
+      const session = data.session || {};
+      const isRunning = session.status === "running";
+
+      console.log(`[RewardsBot] Bing Search Page. Estado sesión: ${session.status}, isRewardsTaskTab: ${isRewardsTask}`);
+
+      if (isRunning || isRewardsTask) {
+        console.log("[RewardsBot] Condición cumplida (sesión activa o tarea de Rewards). Iniciando auto-solver y lectura...");
+        setTimeout(solveActiveTasks, 2500);
+        
+        // Simular lectura aleatoria para parecer más humano (solo 50% de las veces)
+        if (Math.random() > 0.5) {
+          setTimeout(() => {
+            if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateReading) {
+              window.RewardsUtils.Human.simulateReading();
+            }
+          }, 1500);
+        }
+
+        // Si es una tarea de rewards, iniciar el monitoreo para cerrar la pestaña cuando termine
+        if (isRewardsTask) {
+          console.log("[RewardsBot] Tarea de Rewards detectada en pestaña. Iniciando monitoreo de ciclo de vida...");
+          setTimeout(() => {
+            if (isQuizOrPollPresent()) {
+              console.log("[RewardsBot] Quiz o Poll detectado. Monitoreando resolución...");
+              let lastActionTime = Date.now();
+              let totalElapsed = 0;
+              
+              const updateAction = () => {
+                lastActionTime = Date.now();
+              };
+              document.addEventListener("click", updateAction);
+
+              const interval = setInterval(() => {
+                totalElapsed += 2000;
+                const quizActive = isQuizOrPollPresent();
+                const idleTime = Date.now() - (window.lastRewardsActionTime || lastActionTime);
+
+                console.log(`[RewardsBot] Monitoreo de Quiz: activo=${quizActive}, inactivo por=${Math.round(idleTime/1000)}s, total=${Math.round(totalElapsed/1000)}s`);
+
+                if ((!quizActive && idleTime > 8000) || idleTime > 25000 || totalElapsed > 90000) {
+                  console.log("[RewardsBot] El quiz/poll ha terminado o se alcanzó el timeout. Cerrando pestaña...");
+                  clearInterval(interval);
+                  document.removeEventListener("click", updateAction);
+                  chrome.runtime.sendMessage({ action: "closeMyTab" });
+                }
+              }, 2000);
+            } else {
+              console.log("[RewardsBot] Tarea de visita simple detectada. Programando cierre en 10s...");
+              setTimeout(() => {
+                console.log("[RewardsBot] 10s transcurridos. Cerrando pestaña de visita...");
+                chrome.runtime.sendMessage({ action: "closeMyTab" });
+              }, 10000);
+            }
+          }, 3500);
+        }
+      } else {
+        console.log("[RewardsBot] Auto-solver y lectura omitidos: la sesión no está activa y no es una tarea de Rewards.");
+      }
+    });
   });
 }
 
@@ -1002,8 +1042,11 @@ function initRewardsPanel() {
       <div class="rap-header-icon">⭐</div>
       <div>
         <span class="rap-header-title">Rewards <span>Auto</span></span>
-        <span class="rap-header-version">v3.1</span>
+        <span class="rap-header-version">v4.1.0</span>
       </div>
+    </div>
+    <div id="rap-header-points-container" style="display: none; align-items: center; background: rgba(255, 255, 255, 0.15); padding: 4px 10px; border-radius: 20px; margin-left: auto; margin-right: 15px; border: 1px solid rgba(255,255,255,0.1);">
+      <span style="font-size: 14px; font-weight: bold; color: #ffeb3b; text-shadow: 0 0 5px rgba(255,235,59,0.5);">🪙 <span id="rap-header-points-value">--</span></span>
     </div>
     <div class="rap-header-actions">
       <button class="rap-btn-icon minimize" title="Minimizar">
@@ -1044,7 +1087,7 @@ function initRewardsPanel() {
     </button>
     <div class="rap-footer-meta">
       <span id="rap-last-update">Último escaneo: --</span>
-      <span>Rewards Auto v3.1</span>
+      <span>Rewards Auto v4.1.0</span>
     </div>
   `;
 
@@ -1066,6 +1109,18 @@ function initRewardsPanel() {
 
   setupPanelEvents(panel, header);
   renderSections();
+
+  // Cargar puntos de almacenamiento local de inmediato
+  chrome.storage.local.get("stats", (res) => {
+    if (res && res.stats && res.stats.todayPoints !== undefined && res.stats.todayPoints > 0) {
+      const pointsContainer = document.getElementById('rap-header-points-container');
+      const pointsValue = document.getElementById('rap-header-points-value');
+      if (pointsContainer && pointsValue) {
+        pointsContainer.style.display = 'flex';
+        pointsValue.innerText = res.stats.todayPoints;
+      }
+    }
+  });
 
   // Iniciar escaneo de tareas
   runFullScan();
@@ -1405,8 +1460,159 @@ function updateStatus(text, type = 'info') {
   }
 }
 
+// Helper para extraer Puntos de Hoy de forma robusta
+async function extractTodayPoints() {
+  const values = [];
+
+  // Método 1: Leer script tags con "dashboard"
+  try {
+    const scripts = document.querySelectorAll('script');
+    for (let s of scripts) {
+      if (s.innerText && s.innerText.includes('dashboard')) {
+        const match = s.innerText.match(/var\s+dashboard\s*=\s*(\{[\s\S]*?\});/);
+        if (match && match[1]) {
+          try {
+            const db = JSON.parse(match[1]);
+            if (db && db.userStatus) {
+              const userStatus = db.userStatus;
+              if (userStatus.todayPoints !== undefined && userStatus.todayPoints !== null) {
+                const val = parseInt(userStatus.todayPoints, 10);
+                if (!isNaN(val) && val > 0) values.push(val);
+              }
+              if (userStatus.counters && userStatus.counters.dailyPoint) {
+                const calculated = userStatus.counters.dailyPoint.reduce((acc, curr) => acc + (curr.pointProgress || 0), 0);
+                if (calculated > 0) values.push(calculated);
+              }
+            }
+          } catch(e) {}
+        }
+      }
+    }
+  } catch (e) {
+    console.log("[RewardsBot] Error parseando script tags dashboard:", e);
+  }
+
+  // Método 2: API Fetch local al endpoint getuserinfo (con cookies)
+  try {
+    const response = await fetch("https://rewards.bing.com/api/getuserinfo", { credentials: "include" });
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.userStatus) {
+        if (data.userStatus.todayPoints !== undefined && data.userStatus.todayPoints !== null) {
+          const val = parseInt(data.userStatus.todayPoints, 10);
+          if (!isNaN(val) && val > 0) values.push(val);
+        }
+        if (data.userStatus.counters && data.userStatus.counters.dailyPoint) {
+          const calculated = data.userStatus.counters.dailyPoint.reduce((acc, curr) => acc + (curr.pointProgress || 0), 0);
+          if (calculated > 0) values.push(calculated);
+        }
+      }
+    }
+  } catch (e) {
+    console.log("[RewardsBot] Error llamando a api/getuserinfo:", e);
+  }
+
+  // Helper para buscar un elemento por texto dentro de Shadow DOM
+  function findElementByTextDeep(root, regex) {
+    if (!root) return null;
+    if (root.nodeType === Node.ELEMENT_NODE) {
+      if (root.shadowRoot) {
+        const found = findElementByTextDeep(root.shadowRoot, regex);
+        if (found) return found;
+      }
+      const text = (root.innerText || root.textContent || "").trim();
+      if (regex.test(text)) {
+        let childMatch = null;
+        for (let child of root.children) {
+          const found = findElementByTextDeep(child, regex);
+          if (found) {
+            childMatch = found;
+            break;
+          }
+        }
+        return childMatch || root;
+      }
+    } else if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+      for (let child of root.children) {
+        const found = findElementByTextDeep(child, regex);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  // Helper para extraer números dentro del contenedor (incluyendo Shadow DOM)
+  function getNumbersDeep(node) {
+    const numbers = [];
+    function collect(n) {
+      if (!n) return;
+      if (n.nodeType === Node.ELEMENT_NODE) {
+        const text = (n.innerText || n.textContent || "").trim();
+        // Si el texto es puramente numérico, lo agregamos
+        const val = parseInt(text.replace(/\D/g, ""), 10);
+        if (!isNaN(val) && val > 0) {
+          numbers.push(val);
+        }
+        if (n.shadowRoot) {
+          collect(n.shadowRoot);
+        }
+      }
+      for (let child of n.childNodes) {
+        collect(child);
+      }
+    }
+    collect(node);
+    return numbers;
+  }
+
+  // Método 3: Búsqueda localizada en el DOM por etiqueta (Shadow-DOM Piercing)
+  try {
+    const targetRegex = /^(Puntos de hoy|Today's points)$/i;
+    const labelEl = findElementByTextDeep(document.body, targetRegex);
+    if (labelEl) {
+      const parent = labelEl.parentElement || labelEl.getRootNode();
+      if (parent) {
+        const siblingNumbers = getNumbersDeep(parent);
+        if (siblingNumbers.length > 0) {
+          values.push(siblingNumbers[0]);
+          console.log("[RewardsBot] Puntos detectados via Deep DOM traversal:", siblingNumbers[0]);
+        }
+      }
+    }
+  } catch (e) {
+    console.log("[RewardsBot] Error en DOM traversal:", e);
+  }
+
+  // Método 4: Expresión regular sobre innerText completo (fallback)
+  try {
+    const bodyText = document.body.innerText || document.body.textContent || "";
+    const match = bodyText.match(/(?:Puntos de hoy|Today's points)[^\d]{1,40}?(\d+)/i);
+    if (match && match[1]) {
+      const val = parseInt(match[1], 10);
+      if (!isNaN(val)) values.push(val);
+    } else {
+      const match2 = bodyText.match(/(?:Puntos de hoy|Today's points)[\s\S]{1,50}?(?:\n|\r)\s*(\d+)/i);
+      if (match2 && match2[1]) {
+        const val = parseInt(match2[1], 10);
+        if (!isNaN(val)) values.push(val);
+      }
+    }
+  } catch (e) {
+    console.log("[RewardsBot] Error en innerText regex:", e);
+  }
+
+  // Retornar el valor máximo encontrado
+  if (values.length > 0) {
+    const maxVal = Math.max(...values);
+    console.log("[RewardsBot] Valores candidatos encontrados:", values, "-> Seleccionado:", maxVal);
+    return maxVal;
+  }
+
+  return null;
+}
+
 // ─── Sincronizar Barra de Status General ───
-function updateStatusBar() {
+async function updateStatusBar() {
   const sections = panelState.sections;
   const totalTasks = Object.values(sections).reduce((sum, s) => sum + (s.tasks?.length || 0), 0);
   const completedTasks = Object.values(sections).reduce((sum, s) => 
@@ -1436,10 +1642,33 @@ function updateStatusBar() {
       claimAllBtn.innerHTML = `<span>🚀</span><span>Reclamar ${pending} Tarea(s)</span>`;
     }
   }
-  
+
+  // Actualizar timestamp de último escaneo
   const meta = document.getElementById('rap-last-update');
   if (meta) {
     meta.textContent = `Último escaneo: ${new Date().toLocaleTimeString()}`;
+  }
+
+  // Extraer Puntos de Hoy del DOM (siempre, independientemente del estado de tareas)
+  try {
+    const extractedTodayPts = await extractTodayPoints();
+    if (extractedTodayPts !== null && !isNaN(extractedTodayPts) && extractedTodayPts > 0) {
+      console.log(`[RewardsBot] Puntos de hoy extraídos: ${extractedTodayPts}`);
+      chrome.runtime.sendMessage({
+        action: "forceUpdateTodayPoints",
+        points: extractedTodayPts
+      });
+      
+      // Actualizar UI del panel flotante
+      const pointsContainer = document.getElementById('rap-header-points-container');
+      const pointsValue = document.getElementById('rap-header-points-value');
+      if (pointsContainer && pointsValue) {
+        pointsContainer.style.display = 'flex';
+        pointsValue.innerText = extractedTodayPts;
+      }
+    }
+  } catch(e) {
+    console.log("[RewardsBot] Error extrayendo puntos de hoy:", e);
   }
 }
 
@@ -1509,28 +1738,28 @@ async function runFullScan() {
     }
     panelState.sections.punchCards.loading = false;
 
-    // 3. More Activities
-    if (!isDashboard) {
-      try {
-        if (window.RewardsWorkers && window.RewardsWorkers.MoreActivities) {
-          const tasks = await window.RewardsWorkers.MoreActivities.scan();
-          panelState.sections.moreActivities.tasks = tasks;
-        }
-      } catch (e) { console.log("[RewardsBot] Error escaneando More Activities:", e); }
-    }
+    // 3. More Activities (se escanea en TODAS las páginas: dashboard, /earn, etc.)
+    try {
+      if (window.RewardsWorkers && window.RewardsWorkers.MoreActivities) {
+        console.log(`[RewardsBot] Escaneando More Activities en ${window.location.pathname}...`);
+        const tasks = await window.RewardsWorkers.MoreActivities.scan();
+        panelState.sections.moreActivities.tasks = tasks;
+        console.log(`[RewardsBot] More Activities: ${tasks.length} tareas detectadas.`);
+      } else {
+        console.log('[RewardsBot] Worker MoreActivities no disponible.');
+      }
+    } catch (e) { console.log("[RewardsBot] Error escaneando More Activities:", e); }
     panelState.sections.moreActivities.loading = false;
 
-    // 4. Streak Bonus
-    if (!isDashboard) {
-      try {
-        if (window.RewardsWorkers && window.RewardsWorkers.StreakBonus) {
-          const data = await window.RewardsWorkers.StreakBonus.scan();
-          if (data) {
-            panelState.sections.streakBonus.data = data;
-          }
+    // 4. Streak Bonus (se escanea en TODAS las páginas)
+    try {
+      if (window.RewardsWorkers && window.RewardsWorkers.StreakBonus) {
+        const data = await window.RewardsWorkers.StreakBonus.scan();
+        if (data) {
+          panelState.sections.streakBonus.data = data;
         }
-      } catch (e) { console.log("[RewardsBot] Error escaneando Streak Bonus:", e); }
-    }
+      }
+    } catch (e) { console.log("[RewardsBot] Error escaneando Streak Bonus:", e); }
     panelState.sections.streakBonus.loading = false;
 
     saveScannedTasksToStorage();

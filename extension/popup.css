@@ -47,6 +47,9 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 20px rgba(16, 185, 129, 0.15);
+
+  /* Mode color (Mejora 4C) */
+  --mode-color: var(--border-color);
 }
 
 /* ─── Reset & Base ─── */
@@ -66,6 +69,8 @@ body {
   display: flex;
   flex-direction: column;
   -webkit-font-smoothing: antialiased;
+  border: 1px solid var(--mode-color);
+  transition: border-color 0.3s ease;
 }
 
 /* ─── Scrollbar ─── */
@@ -92,8 +97,9 @@ body {
   align-items: center;
   padding: 14px 16px;
   background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-app) 100%);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 2px solid var(--mode-color);
   backdrop-filter: blur(10px);
+  transition: border-bottom-color 0.3s ease;
 }
 
 .logo-area {
@@ -115,6 +121,16 @@ body {
 .logo-icon-wrapper:hover {
   transform: scale(1.05) rotate(5deg);
   box-shadow: 0 0 25px var(--primary-glow);
+}
+/* Mode coloring styles (Mejora 4C) */
+body.mode-desktop {
+  --mode-color: #3b82f6;
+}
+body.mode-edge {
+  --mode-color: #10b981;
+}
+body.mode-idle {
+  --mode-color: var(--border-color);
 }
 .logo-icon-wrapper svg {
   color: white;
@@ -1358,5 +1374,92 @@ input:checked + .slider::before {
 
 .btn-refresh.spinning svg {
   animation: spin-loading 1s linear infinite;
+}
+
+/* ─── Activity Log Panel (Mejora 4D) ─── */
+.activity-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.3s ease;
+}
+
+.activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  user-select: none;
+}
+
+.activity-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.activity-title-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.activity-icon {
+  font-size: 14px;
+}
+
+.activity-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+}
+
+.activity-arrow {
+  font-size: 9px;
+  color: var(--text-muted);
+  transition: transform 0.3s ease;
+}
+
+.activity-body {
+  height: 0px;
+  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.activity-body.expanded {
+  height: 120px;
+}
+
+.activity-log-container {
+  height: 100%;
+  padding: 8px 12px;
+  overflow-y: auto;
+  font-family: 'Consolas', 'Courier New', Courier, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  background: #06090e;
+  color: #a3b3bc;
+}
+
+.log-entry {
+  margin-bottom: 4px;
+  word-break: break-all;
+  text-align: left;
+}
+
+.log-time {
+  color: var(--text-muted);
+  margin-right: 6px;
+}
+
+.log-empty-msg {
+  color: var(--text-dim);
+  text-align: center;
+  padding-top: 40px;
 }
 

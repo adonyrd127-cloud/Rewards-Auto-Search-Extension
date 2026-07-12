@@ -3,14 +3,12 @@ importScripts('words.js');
 
 // Constants
 const EDGE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.2592.81";
-const MOBILE_UA = "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
+// MOBILE_UA removed — mobile searches no longer earn Rewards points (2024-2025)
 const BING_SEARCH_URL = "https://www.bing.com/search?q=";
 
 // Default configuration
 const DEFAULT_SETTINGS = {
   desktopSearches: 30,
-  mobileSearches: 20,
-  edgeSearches: 20,
   minDelay: 6, // seconds
   maxDelay: 15, // seconds
   cooldownBetweenSearches: 2, // seconds
@@ -27,14 +25,15 @@ const DEFAULT_SETTINGS = {
 // Default session state
 const DEFAULT_SESSION = {
   status: "idle", // "idle", "running", "paused", "stopped", "completed"
-  mode: null, // "desktop", "mobile", "edge"
+  mode: null, // "desktop" or "edge"
   totalSearches: 0,
   completedSearches: 0,
   pointsEarned: 0,
   currentIndex: 0,
   queries: [],
   tabId: null,
-  modesQueue: [] // To chain desktop -> mobile -> edge
+  modesQueue: [], // To chain desktop -> mobile -> edge
+  openedTabIds: [] // Track all opened tabs for auto-close
 };
 
 // Initialize extension on install
@@ -74,11 +73,119 @@ chrome.runtime.onInstalled.addListener(async () => {
 let activeTaskTabId = null;
 let dashboardTabId = null;
 
+// ---------------------------------------------------------------------------
+// Automation Tab Tracking — prevents automation from running in user's
+// manual tabs. Only tabs explicitly created by the extension are tracked.
+// ---------------------------------------------------------------------------
+
+/**
+ * Registers a tab as controlled by the extension's automation.
+ * Persists to chrome.storage.local so content scripts can query it.
+ * @param {number} tabId
+ */
+async function registerAutomationTab(tabId) {
+  if (!tabId) return;
+  const data = await chrome.storage.local.get('automationTabIds');
+  const ids = data.automationTabIds || [];
+  if (!ids.includes(tabId)) {
+    ids.push(tabId);
+    await chrome.storage.local.set({ automationTabIds: ids });
+    console.log(`[RewardsBot][background] Registered automation tab: ${tabId}. Active set: [${ids}]`);
+  }
+}
+
+/**
+ * Removes a tab from the automation tracking set.
+ * @param {number} tabId
+ */
+async function unregisterAutomationTab(tabId) {
+  if (!tabId) return;
+  const data = await chrome.storage.local.get('automationTabIds');
+  const ids = (data.automationTabIds || []).filter(id => id !== tabId);
+  await chrome.storage.local.set({ automationTabIds: ids });
+  console.log(`[RewardsBot][background] Unregistered automation tab: ${tabId}. Remaining: [${ids}]`);
+}
+
+/**
+ * Clears all tracked automation tabs (used on session end).
+ */
+async function clearAllAutomationTabs() {
+  await chrome.storage.local.set({ automationTabIds: [] });
+  console.log('[RewardsBot][background] Cleared all automation tab IDs.');
+}
+
+/**
+ * Tracks a tab ID in the session state.
+ */
+async function trackOpenedTab(tabId) {
+  if (!tabId) return;
+  try {
+    const data = await chrome.storage.local.get("session");
+    const session = data.session || {};
+    if (!session.openedTabIds) session.openedTabIds = [];
+    if (!session.openedTabIds.includes(tabId)) {
+      session.openedTabIds.push(tabId);
+    }
+    await chrome.storage.local.set({ session });
+    console.log(`[RewardsBot][background] Tracked opened tab: ${tabId}`);
+  } catch (e) {
+    console.error("Error in trackOpenedTab:", e);
+  }
+}
+
+/**
+ * Removes a tab ID from the session openedTabIds.
+ */
+async function removeTrackedTab(tabId) {
+  if (!tabId) return;
+  try {
+    const data = await chrome.storage.local.get("session");
+    const session = data.session;
+    if (session && session.openedTabIds) {
+      session.openedTabIds = session.openedTabIds.filter(id => id !== tabId);
+      await chrome.storage.local.set({ session });
+      console.log(`[RewardsBot][background] Untracked tab: ${tabId}`);
+    }
+  } catch (e) {
+    console.error("Error in removeTrackedTab:", e);
+  }
+}
+
+/**
+ * Closes all tabs opened by the extension and clears tracking list.
+ */
+async function cleanupSessionTabs() {
+  try {
+    const data = await chrome.storage.local.get("session");
+    const session = data.session;
+    if (session && session.openedTabIds && session.openedTabIds.length > 0) {
+      console.log(`[RewardsBot][background] Cleaning up ${session.openedTabIds.length} tabs:`, session.openedTabIds);
+      for (const tabId of session.openedTabIds) {
+        try {
+          await chrome.tabs.remove(tabId);
+        } catch (e) {
+          // Tab might have been closed already
+        }
+      }
+      session.openedTabIds = [];
+      await chrome.storage.local.set({ session });
+    }
+  } catch (e) {
+    console.error("Error in cleanupSessionTabs:", e);
+  }
+}
+
+// Cleanup on service worker suspend/deactivation
+chrome.runtime.onSuspend.addListener(() => {
+  cleanupSessionTabs();
+});
+
 // Track task tab creation
 chrome.tabs.onCreated.addListener((tab) => {
   if (dashboardTabId && !activeTaskTabId) {
     if (tab.openerTabId === dashboardTabId || (tab.pendingUrl && /bing\.com|microsoft\.com/i.test(tab.pendingUrl))) {
       activeTaskTabId = tab.id;
+      registerAutomationTab(tab.id); // Mark as automation-controlled
       console.log(`[RewardsBot][background] Registered active task tab: ${tab.id} opened by dashboard: ${dashboardTabId}`);
     }
   }
@@ -86,6 +193,9 @@ chrome.tabs.onCreated.addListener((tab) => {
 
 // Track task tab removal/closing
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+  // Always clean up from automation set when any tracked tab closes
+  unregisterAutomationTab(tabId);
+
   if (tabId === activeTaskTabId) {
     console.log(`[RewardsBot][background] Active task tab ${tabId} closed.`);
     activeTaskTabId = null;
@@ -99,6 +209,23 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 
 // Listener for runtime messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // --- Tab identity check: content scripts ask "am I an automation tab?" ---
+  // This is the critical guard that prevents automation from running in
+  // the user's manual Bing tabs. Only tabs explicitly created by the
+  // extension's search session or task claiming flow return true.
+  if (message.action === "isAutomationTab") {
+    const senderTabId = sender.tab?.id;
+    chrome.storage.local.get(['automationTabIds', 'session'], (data) => {
+      const ids = data.automationTabIds || [];
+      const session = data.session || {};
+      // A tab is an automation tab if it's in our tracked set OR if it's
+      // the current session's search tab
+      const isAutomation = ids.includes(senderTabId) || session.tabId === senderTabId;
+      sendResponse({ isAutomation });
+    });
+    return true; // async response
+  }
+
   if (message.action === "prepareForTaskTab") {
     dashboardTabId = sender.tab?.id;
     activeTaskTabId = null;
@@ -163,13 +290,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "openAndCloseTab") {
-    chrome.tabs.create({ url: message.url, active: false }, (tab) => {
-      setTimeout(() => {
+    chrome.tabs.create({ url: message.url, active: false }, async (tab) => {
+      await registerAutomationTab(tab.id); // Mark as automation-controlled
+      await trackOpenedTab(tab.id);
+      setTimeout(async () => {
         try {
-          chrome.tabs.remove(tab.id);
+          await chrome.tabs.remove(tab.id);
         } catch (e) {
           // ignore
         }
+        await removeTrackedTab(tab.id);
       }, message.delay || 6000);
     });
     sendResponse({ success: true });
@@ -210,6 +340,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+
+  if (message.action === "forceUpdateTodayPoints") {
+    chrome.storage.local.get("stats", (res) => {
+      const stats = res.stats || {};
+      stats.todayPoints = message.points;
+      stats.lastUpdatedDate = new Date().toISOString().split("T")[0];
+      chrome.storage.local.set({ stats });
+      console.log(`[RewardsBot] forceUpdateTodayPoints: ${message.points}`);
+    });
+    sendResponse({ success: true });
+    return true;
+  }
+
 });
 
 // Alarm Listener for scheduling
@@ -231,12 +374,16 @@ async function openRewardsDashboard() {
   // Verificar si ya hay una pestaña de rewards abierta
   const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
   if (tabs.length > 0) {
-    // Activar la pestaña existente y recargarla
-    await chrome.tabs.update(tabs[0].id, { active: true });
+    // Recargar la pestaña existente sin robar el foco
+    await registerAutomationTab(tabs[0].id);
+    await appendActivityLog("🎯 Recargando dashboard de Rewards para reclamar tareas");
     await chrome.tabs.reload(tabs[0].id);
   } else {
-    // Abrir nueva pestaña
-    await chrome.tabs.create({ url: "https://rewards.bing.com/earn", active: true });
+    // Abrir nueva pestaña en segundo plano (no roba foco al usuario)
+    const newTab = await chrome.tabs.create({ url: "https://rewards.bing.com/earn", active: false });
+    await registerAutomationTab(newTab.id);
+    await trackOpenedTab(newTab.id);
+    await appendActivityLog("🎯 Abriendo dashboard de Rewards en segundo plano");
   }
 }
 
@@ -254,6 +401,16 @@ function showNotification(title, message) {
     console.warn("No se pudo mostrar notificación:", e);
   }
 }
+
+// Handle notification button clicks (Mejora 4B)
+chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+  if (notificationId === "rewards-session-completed") {
+    if (buttonIndex === 0) {
+      chrome.tabs.create({ url: "https://rewards.bing.com", active: true });
+    }
+    chrome.notifications.clear(notificationId);
+  }
+});
 
 // Recordatorio de tareas diarias a las 10 PM
 async function checkDailyTasksReminder() {
@@ -274,56 +431,7 @@ async function checkDailyTasksReminder() {
   }
 }
 
-// Spoof User-Agent header using declarativeNetRequest
-async function setUserAgentRule(mode) {
-  const ruleId = 1;
-  
-  // Remove rule if it exists
-  await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [ruleId]
-  });
 
-  if (mode === "desktop") {
-    console.log("UA Rule: Default desktop agent (no rule)");
-    return;
-  }
-
-  let requestHeaders = [];
-  if (mode === "edge") {
-    requestHeaders = [
-      { header: "User-Agent", operation: "set", value: EDGE_UA },
-      { header: "Sec-CH-UA-Mobile", operation: "set", value: "?0" },
-      { header: "Sec-CH-UA-Platform", operation: "set", value: "\"Windows\"" },
-      { header: "Sec-CH-UA", operation: "set", value: "\"Not)A;Brand\";v=\"99\", \"Microsoft Edge\";v=\"126\", \"Chromium\";v=\"126\"" }
-    ];
-  } else if (mode === "mobile") {
-    requestHeaders = [
-      { header: "User-Agent", operation: "set", value: MOBILE_UA },
-      { header: "Sec-CH-UA-Mobile", operation: "set", value: "?1" },
-      { header: "Sec-CH-UA-Platform", operation: "set", value: "\"Android\"" },
-      { header: "Sec-CH-UA", operation: "set", value: "\"Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"126\", \"Chromium\";v=\"126\"" }
-    ];
-  }
-
-  console.log(`UA Rule: Setting UA spoofing rule for ${mode} mode`);
-
-  const rule = {
-    id: ruleId,
-    priority: 1,
-    action: {
-      type: "modifyHeaders",
-      requestHeaders: requestHeaders
-    },
-    condition: {
-      urlFilter: "*://*.bing.com/*",
-      resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "other"]
-    }
-  };
-
-  await chrome.declarativeNetRequest.updateSessionRules({
-    addRules: [rule]
-  });
-}
 
 // Fetch Google Trends RSS feed and parse queries using regex
 async function fetchTrendingQueries() {
@@ -419,15 +527,13 @@ async function startSearchSession(mode, queue = []) {
     } else if (mode === "edge" && stats.edgeSearch) {
       currentPoints = stats.edgeSearch.current || 0;
       maxPoints = stats.edgeSearch.max || 0;
-    } else if (mode === "mobile" && stats.mobileSearch) {
-      currentPoints = stats.mobileSearch.current || 0;
-      maxPoints = stats.mobileSearch.max || 0;
     }
 
     // Only skip if we have REAL data from today AND searches are truly completed
     // maxPoints must be > 0 (known) AND currentPoints must have reached it
     if (maxPoints > 0 && currentPoints >= maxPoints) {
       console.log(`Skipping ${mode} mode: searches are already completed today (${currentPoints}/${maxPoints} points).`);
+      await appendActivityLog(`⏭️ Omitiendo modo ${mode.toUpperCase()} (ya completado hoy)`);
       
       // If there are other modes queued, chain to the next one
       if (queue && queue.length > 0) {
@@ -449,7 +555,7 @@ async function startSearchSession(mode, queue = []) {
   }
 
   // Determine search count
-  let count = mode === "desktop" ? settings.desktopSearches : (mode === "mobile" ? settings.mobileSearches : settings.edgeSearches);
+  let count = mode === "desktop" ? settings.desktopSearches : settings.edgeSearches;
   
   // Calculate exact remaining searches based on stats
   if (stats && maxPoints > 0) {
@@ -478,6 +584,7 @@ async function startSearchSession(mode, queue = []) {
   };
 
   await sendWebhookNotification(`▶️ Iniciando búsquedas en modo **${mode.toUpperCase()}** (${newSession.totalSearches} búsquedas). Queue restante: ${queue.length > 0 ? queue.join(", ") : "Ninguna"}`);
+  await appendActivityLog(`🚀 Iniciando búsquedas en modo ${mode.toUpperCase()} (${count} búsquedas)`);
 
   await chrome.storage.local.set({ session: newSession });
   notifyPopup();
@@ -492,9 +599,6 @@ async function runSessionLoop(session) {
     const storage = await chrome.storage.local.get("settings");
     const settings = storage.settings || DEFAULT_SETTINGS;
 
-    // Apply User Agent rule for the session mode
-    await setUserAgentRule(session.mode);
-
     // Create the search tab
     const tab = await chrome.tabs.create({
       url: "https://www.bing.com/#ua=" + session.mode,
@@ -502,6 +606,13 @@ async function runSessionLoop(session) {
     });
     
     session.tabId = tab.id;
+    await registerAutomationTab(tab.id); // Mark as automation-controlled
+    
+    // Mobile debugger emulation removed — mobile searches no longer earn points
+    
+    session.tabId = tab.id;
+    if (!session.openedTabIds) session.openedTabIds = [];
+    if (!session.openedTabIds.includes(tab.id)) session.openedTabIds.push(tab.id);
     await chrome.storage.local.set({ session });
 
     // Wait for the page to settle
@@ -523,6 +634,7 @@ async function runSessionLoop(session) {
 
       const query = session.queries[session.currentIndex];
       console.log(`Searching [${session.currentIndex + 1}/${session.totalSearches}]: ${query}`);
+      await appendActivityLog(`🔍 Búsqueda #${session.currentIndex + 1}: "${query}"`);
 
       const searchUrl = BING_SEARCH_URL + encodeURIComponent(query) + "&form=QBRE#ua=" + session.mode;
       
@@ -582,6 +694,9 @@ async function runSessionLoop(session) {
           console.log("Search tab was closed, recreating...");
           const newTab = await chrome.tabs.create({ url: searchUrl, active: false });
           session.tabId = newTab.id;
+          if (!session.openedTabIds) session.openedTabIds = [];
+          if (!session.openedTabIds.includes(newTab.id)) session.openedTabIds.push(newTab.id);
+          await registerAutomationTab(newTab.id); // Mark recreated tab as automation-controlled
           await chrome.storage.local.set({ session });
           await new Promise(resolve => setTimeout(resolve, 3000));
         }
@@ -628,6 +743,7 @@ async function runSessionLoop(session) {
       if (settings.cooldownBetweenSearches) {
         delayMs += settings.cooldownBetweenSearches * 1000;
       }
+      await appendActivityLog(`⏳ Esperando ${Math.round(delayMs / 1000)}s...`);
 
       // Wait the delay in small increments to support rapid pause/stop responsiveness
       const startDelay = Date.now();
@@ -649,6 +765,8 @@ async function runSessionLoop(session) {
 
     if (session && session.status === "running") {
       session.status = "completed";
+      await appendActivityLog(`✅ ${session.mode.toUpperCase()} completado (+${session.pointsEarned} pts)`);
+      await clearAllAutomationTabs(); // Clean up automation tab tracking
       await chrome.storage.local.set({ session });
       
       // Update stats and history
@@ -672,10 +790,9 @@ async function runSessionLoop(session) {
         }
       }
 
-      // Reset UA rule
-      await setUserAgentRule("desktop");
+      // Mobile debugger detach removed — mobile mode no longer exists
 
-      // Check queue for next mode (Desktop -> Mobile -> Edge chaining)
+      // Check queue for next mode (Desktop -> Mobile chaining)
       if (session.modesQueue && session.modesQueue.length > 0) {
         const nextMode = session.modesQueue[0];
         const remainingQueue = session.modesQueue.slice(1);
@@ -687,6 +804,31 @@ async function runSessionLoop(session) {
       } else {
         // Idle out
         console.log("All queued search sessions finished!");
+        
+        // Show summary notification (Mejora 4B)
+        try {
+          const durationMs = session.startTime ? (Date.now() - session.startTime) : 0;
+          const durationMin = Math.floor(durationMs / 60000);
+          const durationSec = Math.floor((durationMs % 60000) / 1000);
+          const durationStr = `${durationMin}m ${durationSec}s`;
+          const summaryMessage = `${session.completedSearches} búsquedas • +${session.pointsEarned} pts • ${durationStr}`;
+          
+          chrome.notifications.create("rewards-session-completed", {
+            type: "basic",
+            iconUrl: "icons/icon-128.png",
+            title: "✅ Sesión Completada",
+            message: summaryMessage,
+            buttons: [
+              { title: "Ver Dashboard" },
+              { title: "Cerrar" }
+            ],
+            priority: 2
+          });
+        } catch (err) {
+          console.error("Failed to create completion notification:", err);
+        }
+
+        await cleanupSessionTabs();
         await chrome.storage.local.set({
           session: DEFAULT_SESSION
         });
@@ -696,16 +838,10 @@ async function runSessionLoop(session) {
         await sendWebhookNotification(`✅ Todos los modos de búsqueda han finalizado correctamente.`);
       }
     } else if (session && session.status === "stopped") {
-      // Clean up tab
-      if (finalState.settings.autoCloseTabs && session.tabId) {
-        try {
-          await chrome.tabs.remove(session.tabId);
-        } catch (e) {
-          // ignore
-        }
-      }
-      await setUserAgentRule("desktop");
+      await clearAllAutomationTabs(); // Clean up automation tab tracking
+      await cleanupSessionTabs();
       await updateStatsAndHistory(session);
+      await appendActivityLog("🛑 Sesión detenida por el usuario");
       await chrome.storage.local.set({ session: DEFAULT_SESSION });
       notifyPopup();
       await sendWebhookNotification(`🛑 Sesión detenida por el usuario o debido a un error.`);
@@ -713,7 +849,9 @@ async function runSessionLoop(session) {
 
   } catch (error) {
     console.error("Error in session loop:", error);
-    await setUserAgentRule("desktop");
+    await clearAllAutomationTabs(); // Clean up on error too
+    await cleanupSessionTabs();
+    await appendActivityLog(`❌ Error: ${error.message || error}`);
     await chrome.storage.local.set({ session: DEFAULT_SESSION });
     notifyPopup();
   }
@@ -726,6 +864,7 @@ async function pauseSearchSession() {
   if (session && session.status === "running") {
     session.status = "paused";
     session.pausedTime = Date.now();
+    await appendActivityLog("⏸️ Automatización pausada");
     await chrome.storage.local.set({ session });
     notifyPopup();
   }
@@ -742,6 +881,7 @@ async function resumeSearchSession() {
       session.startTime = (session.startTime || Date.now()) + pauseDuration;
       delete session.pausedTime;
     }
+    await appendActivityLog("▶️ Automatización reanudada");
     await chrome.storage.local.set({ session });
     notifyPopup();
   }
@@ -801,11 +941,6 @@ async function updateStatsAndHistory(session) {
       stats.edgeSearch.current = Math.min(
         (stats.edgeSearch.current || 0) + session.pointsEarned,
         stats.edgeSearch.max || 60
-      );
-    } else if (session.mode === 'mobile' && stats.mobileSearch) {
-      stats.mobileSearch.current = Math.min(
-        (stats.mobileSearch.current || 0) + session.pointsEarned,
-        stats.mobileSearch.max || 60
       );
     }
 
@@ -966,7 +1101,6 @@ async function triggerScheduledRun() {
   
   // Build queue of enabled search modes
   const queue = [];
-  if (settings.mobileSearches > 0) queue.push("mobile");
   if (settings.edgeSearches > 0) queue.push("edge");
   
   // Start with desktop if configured
@@ -977,11 +1111,68 @@ async function triggerScheduledRun() {
   }
 }
 
-// Notify popup of progress updates
+/**
+ * Updates the extension icon badge.
+ */
+function updateBadge(session) {
+  try {
+    if (session && session.status === "running") {
+      const remaining = session.totalSearches - session.completedSearches;
+      chrome.action.setBadgeText({ text: remaining > 0 ? String(remaining) : "" });
+      chrome.action.setBadgeBackgroundColor({ color: "#10B981" }); // Green
+    } else if (session && session.status === "completed") {
+      chrome.action.setBadgeText({ text: "✓" });
+      chrome.action.setBadgeBackgroundColor({ color: "#10B981" }); // Green
+      setTimeout(() => {
+        chrome.action.setBadgeText({ text: "" });
+      }, 2000);
+    } else {
+      chrome.action.setBadgeText({ text: "" });
+    }
+  } catch (e) {
+    console.error("Error updating badge:", e);
+  }
+}
+
+// Notify popup of progress updates and update the icon badge
 function notifyPopup() {
+  chrome.storage.local.get("session").then(data => {
+    if (data.session) {
+      updateBadge(data.session);
+    }
+  }).catch(e => console.error("Error getting session for badge update:", e));
+
   chrome.runtime.sendMessage({ action: "sessionUpdate" }).catch(() => {
     // Ignore error if popup is closed
   });
+}
+
+/**
+ * Appends a message to the activity log in chrome.storage.local.
+ */
+async function appendActivityLog(message) {
+  try {
+    const timeStr = new Date().toLocaleTimeString('es-ES', { hour12: false });
+    const logEntry = `[${timeStr}] ${message}`;
+    
+    const data = await chrome.storage.local.get("activityLog");
+    const logs = data.activityLog || [];
+    logs.push(logEntry);
+    
+    // Prune to last 20 entries
+    if (logs.length > 20) {
+      logs.shift();
+    }
+    
+    await chrome.storage.local.set({ activityLog: logs });
+    
+    // Notify popup if it is open
+    chrome.runtime.sendMessage({ action: "activityLogUpdate", logEntry }).catch(() => {
+      // Ignore if popup is closed
+    });
+  } catch (e) {
+    console.error("Error appending activity log:", e);
+  }
 }
 
 // Fetch user stats directly from Microsoft Rewards internal API
@@ -1101,7 +1292,13 @@ async function syncUserInfo() {
 
   const counters = userStatus.counters || {};
 
-  // Intentar obtener Puntos y Racha robustamente del DOM
+  // Calcular matemáticamente los Puntos Hoy desde la API nativa de Microsoft
+  let apiCalculatedTodayPoints = 0;
+  if (counters.dailyPoint && Array.isArray(counters.dailyPoint)) {
+    apiCalculatedTodayPoints = counters.dailyPoint.reduce((acc, curr) => acc + (curr.pointProgress || 0), 0);
+  }
+
+  // Intentar obtener Puntos y Racha robustamente del DOM como fallback
   let domTodayPoints = null;
   let domTotalPoints = null;
   let domStreak = null;
@@ -1110,7 +1307,8 @@ async function syncUserInfo() {
     if (tabs.length > 0) {
       const domResult = await chrome.scripting.executeScript({
         target: { tabId: tabs[0].id },
-        func: () => {
+        world: "MAIN",
+        func: async () => {
           let todayPts = null;
           let totalPts = null;
           let stk = null;
@@ -1127,20 +1325,134 @@ async function syncUserInfo() {
             }
           }
 
-          // Today Points (usually not directly exposed in the new UI easily, fallback to empty or attempt parse)
-          const todayElems = document.querySelectorAll('mee-rewards-user-status-item[data-bi-id="today-points"] .status-item-value');
-          for (let el of todayElems) {
-            if (el && el.innerText) {
-              const pts = parseInt(el.innerText.replace(/\D/g, ''));
-              if (!isNaN(pts)) {
-                todayPts = pts;
-                break;
+          const values = [];
+
+          // 1. Intentar obtener de window.dashboard (si existe)
+          try {
+            if (window.dashboard && window.dashboard.userStatus) {
+              const userStatus = window.dashboard.userStatus;
+              if (userStatus.todayPoints !== undefined && userStatus.todayPoints !== null) {
+                const val = parseInt(userStatus.todayPoints, 10);
+                if (!isNaN(val) && val > 0) values.push(val);
+              }
+              if (userStatus.counters && userStatus.counters.dailyPoint) {
+                const apiPts = userStatus.counters.dailyPoint.reduce((acc, curr) => acc + (curr.pointProgress || 0), 0);
+                if (apiPts > 0) {
+                  values.push(apiPts);
+                }
               }
             }
+          } catch(e) {}
+
+          // 2. Intentar fetch local del API (getuserinfo)
+          try {
+            const response = await fetch("https://rewards.bing.com/api/getuserinfo", { credentials: "include" });
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.userStatus) {
+                if (data.userStatus.todayPoints !== undefined && data.userStatus.todayPoints !== null) {
+                  const val = parseInt(data.userStatus.todayPoints, 10);
+                  if (!isNaN(val) && val > 0) values.push(val);
+                }
+                if (data.userStatus.counters && data.userStatus.counters.dailyPoint) {
+                  const calculated = data.userStatus.counters.dailyPoint.reduce((acc, curr) => acc + (curr.pointProgress || 0), 0);
+                  if (calculated > 0) {
+                    values.push(calculated);
+                  }
+                }
+              }
+            }
+          } catch (e) {}
+
+          // Helper para buscar un elemento por texto dentro de Shadow DOM
+          function findElementByTextDeep(root, regex) {
+            if (!root) return null;
+            if (root.nodeType === Node.ELEMENT_NODE) {
+              if (root.shadowRoot) {
+                const found = findElementByTextDeep(root.shadowRoot, regex);
+                if (found) return found;
+              }
+              const text = (root.innerText || root.textContent || "").trim();
+              if (regex.test(text)) {
+                let childMatch = null;
+                for (let child of root.children) {
+                  const found = findElementByTextDeep(child, regex);
+                  if (found) {
+                    childMatch = found;
+                    break;
+                  }
+                }
+                return childMatch || root;
+              }
+            } else if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+              for (let child of root.children) {
+                const found = findElementByTextDeep(child, regex);
+                if (found) return found;
+              }
+            }
+            return null;
+          }
+
+          // Helper para extraer números dentro del contenedor (incluyendo Shadow DOM)
+          function getNumbersDeep(node) {
+            const numbers = [];
+            function collect(n) {
+              if (!n) return;
+              if (n.nodeType === Node.ELEMENT_NODE) {
+                const text = (n.innerText || n.textContent || "").trim();
+                const val = parseInt(text.replace(/\D/g, ""), 10);
+                if (!isNaN(val) && val > 0) {
+                  numbers.push(val);
+                }
+                if (n.shadowRoot) {
+                  collect(n.shadowRoot);
+                }
+              }
+              for (let child of n.childNodes) {
+                collect(child);
+              }
+            }
+            collect(node);
+            return numbers;
+          }
+
+          // 3. Búsqueda localizada en el DOM por etiqueta (Shadow-DOM Piercing)
+          try {
+            const targetRegex = /^(Puntos de hoy|Today's points)$/i;
+            const labelEl = findElementByTextDeep(document.body, targetRegex);
+            if (labelEl) {
+              const parent = labelEl.parentElement || labelEl.getRootNode();
+              if (parent) {
+                const siblingNumbers = getNumbersDeep(parent);
+                if (siblingNumbers.length > 0) {
+                  values.push(siblingNumbers[0]);
+                }
+              }
+            }
+          } catch(e) {}
+
+          // 4. Regex innerText Fallback
+          try {
+            const bodyText = document.body.innerText || document.body.textContent || "";
+            const match = bodyText.match(/(?:Puntos de hoy|Today's points)[^\d]{1,40}?(\d+)/i);
+            if (match && match[1]) {
+              const val = parseInt(match[1], 10);
+              if (!isNaN(val)) values.push(val);
+            } else {
+              const match2 = bodyText.match(/(?:Puntos de hoy|Today's points)[\s\S]{1,50}?(?:\n|\r)\s*(\d+)/i);
+              if (match2 && match2[1]) {
+                const val = parseInt(match2[1], 10);
+                if (!isNaN(val)) values.push(val);
+              }
+            }
+          } catch(e) {}
+
+          // Seleccionar el valor máximo
+          if (values.length > 0) {
+            todayPts = Math.max(...values);
           }
           
           // Streak
-          // Look for buttons that contain the word "Racha" or legacy streak counters
           const stkElems = document.querySelectorAll('button, .streak-count, [data-bi-id="streak"]');
           for (let el of stkElems) {
             if (el && el.innerText && (el.innerText.toLowerCase().includes('racha') || el.classList.contains('streak-count'))) {
@@ -1165,10 +1477,24 @@ async function syncUserInfo() {
     console.log("No se pudo obtener Puntos/Racha del DOM, usando valor de API o previos.");
   }
 
-  let realTodayPoints = userStatus.todayPoints;
-  if (realTodayPoints === undefined || realTodayPoints === 0) {
-    realTodayPoints = domTodayPoints !== null ? domTodayPoints : prevStats.todayPoints || 0;
+  // Calculate final todayPoints by selecting the maximum value from all available sources
+  let todayPointsCandidates = [];
+  if (userStatus.todayPoints !== undefined && userStatus.todayPoints !== null) {
+    todayPointsCandidates.push(parseInt(userStatus.todayPoints, 10));
   }
+  if (apiCalculatedTodayPoints > 0) {
+    todayPointsCandidates.push(apiCalculatedTodayPoints);
+  }
+  if (domTodayPoints !== null) {
+    todayPointsCandidates.push(domTodayPoints);
+  }
+  if (prevStats.todayPoints > 0) {
+    todayPointsCandidates.push(prevStats.todayPoints);
+  }
+  
+  let realTodayPoints = todayPointsCandidates.length > 0 
+    ? Math.max(...todayPointsCandidates.filter(v => !isNaN(v))) 
+    : 0;
 
   let realTotalPoints = userStatus.availablePoints;
   if (realTotalPoints === undefined || realTotalPoints === 0) {
@@ -1194,56 +1520,19 @@ async function syncUserInfo() {
     apiPcFound = true;
   }
 
-  let apiEdgeCurrent = 0, apiEdgeMax = 0, apiEdgeFound = false;
-  if (counters.pcSearch && counters.pcSearch[1]) {
-    apiEdgeCurrent = counters.pcSearch[1].pointProgress || 0;
-    apiEdgeMax = counters.pcSearch[1].pointProgressMax || 0;
-    apiEdgeFound = true;
-  } else if (counters.edgeSearch && counters.edgeSearch[0]) {
-    apiEdgeCurrent = counters.edgeSearch[0].pointProgress || 0;
-    apiEdgeMax = counters.edgeSearch[0].pointProgressMax || 0;
-    apiEdgeFound = true;
-  }
-
-  let apiMobileCurrent = 0, apiMobileMax = 0, apiMobileFound = false;
-  if (counters.mobileSearch && counters.mobileSearch[0]) {
-    apiMobileCurrent = counters.mobileSearch[0].pointProgress || 0;
-    apiMobileMax = counters.mobileSearch[0].pointProgressMax || 0;
-    apiMobileFound = true;
-  } else if (counters.mobileSearch && counters.mobileSearch.length > 0) {
-    apiMobileCurrent = counters.mobileSearch[counters.mobileSearch.length - 1].pointProgress || 0;
-    apiMobileMax = counters.mobileSearch[counters.mobileSearch.length - 1].pointProgressMax || 0;
-    apiMobileFound = true;
-  }
-
   const todayStr = new Date().toISOString().split("T")[0];
   const isToday = prevStats.lastUpdatedDate === todayStr;
 
   let pcCurrent = 0, pcMax = 90;
-  let edgeCurrent = 0, edgeMax = 60;
-  let mobileCurrent = 0, mobileMax = 60;
 
   if (isToday) {
     // If lastUpdatedDate is today, only update if the new points from the API are >= the cached points.
-    // We never reset pcSearch/edgeSearch/mobileSearch current/max points to 0 if the API returns 0 or empty counters.
     
     // PC Search
     const prevPcCurrent = prevStats.pcSearch ? (prevStats.pcSearch.current || 0) : 0;
     const prevPcMax = prevStats.pcSearch ? (prevStats.pcSearch.max || 90) : 90;
     pcCurrent = (apiPcFound && apiPcCurrent >= prevPcCurrent) ? apiPcCurrent : prevPcCurrent;
     pcMax = (apiPcFound && apiPcMax > 0) ? apiPcMax : prevPcMax;
-
-    // Edge Search
-    const prevEdgeCurrent = prevStats.edgeSearch ? (prevStats.edgeSearch.current || 0) : 0;
-    const prevEdgeMax = prevStats.edgeSearch ? (prevStats.edgeSearch.max || 60) : 60;
-    edgeCurrent = (apiEdgeFound && apiEdgeCurrent >= prevEdgeCurrent) ? apiEdgeCurrent : prevEdgeCurrent;
-    edgeMax = (apiEdgeFound && apiEdgeMax > 0) ? apiEdgeMax : prevEdgeMax;
-
-    // Mobile Search
-    const prevMobileCurrent = prevStats.mobileSearch ? (prevStats.mobileSearch.current || 0) : 0;
-    const prevMobileMax = prevStats.mobileSearch ? (prevStats.mobileSearch.max || 60) : 60;
-    mobileCurrent = (apiMobileFound && apiMobileCurrent >= prevMobileCurrent) ? apiMobileCurrent : prevMobileCurrent;
-    mobileMax = (apiMobileFound && apiMobileMax > 0) ? apiMobileMax : prevMobileMax;
   } else {
     // The day has changed. We can reset points to 0, but we preserve/default max points if API returns 0.
     
@@ -1255,40 +1544,41 @@ async function syncUserInfo() {
       pcCurrent = 0;
       pcMax = prevStats.pcSearch?.max || 90;
     }
-
-    // Edge Search
-    if (apiEdgeFound) {
-      edgeCurrent = apiEdgeCurrent;
-      edgeMax = apiEdgeMax > 0 ? apiEdgeMax : (prevStats.edgeSearch?.max || 60);
-    } else {
-      edgeCurrent = 0;
-      edgeMax = prevStats.edgeSearch?.max || 60;
-    }
-
-    // Mobile Search
-    if (apiMobileFound) {
-      mobileCurrent = apiMobileCurrent;
-      mobileMax = apiMobileMax > 0 ? apiMobileMax : (prevStats.mobileSearch?.max || 60);
-    } else {
-      mobileCurrent = 0;
-      mobileMax = prevStats.mobileSearch?.max || 60;
-    }
   }
 
-  // Final check: if mobile search is not found in API and pcMax <= 60, mobile search is not available.
-  if (!apiMobileFound && pcMax > 0 && pcMax <= 60) {
-    mobileMax = 0;
+  // Tier Auto-detection based on API max points
+  let detectedTier = userStatus.levelInfo?.activeLevel || prevStats.level || "Member";
+  if (pcMax >= 250 || pcMax > 150) {
+    detectedTier = "Gold";
+  } else if (pcMax === 150 || (pcMax > 50 && pcMax <= 150)) {
+    detectedTier = "Silver";
+  } else if (pcMax <= 75) {
+    detectedTier = "Member";
+  }
+
+
+
+  // Reliable Today Points using startOfDayPoints
+  let startOfDayPoints = prevStats.startOfDayPoints || realTotalPoints;
+  if (!isToday || startOfDayPoints > realTotalPoints) {
+    startOfDayPoints = realTotalPoints;
+  }
+  let calculatedTodayPoints = realTotalPoints - startOfDayPoints;
+  if (calculatedTodayPoints < 0) calculatedTodayPoints = 0;
+  
+  // Use calculated points unless the API explicitly provides a higher number
+  if (calculatedTodayPoints > (realTodayPoints || 0)) {
+    realTodayPoints = calculatedTodayPoints;
   }
 
   const stats = {
     todayPoints: realTodayPoints || realTotalPoints,
     totalPoints: realTotalPoints,
     streak: realStreak,
-    level: userStatus.levelInfo?.activeLevel || prevStats.level || "Nivel 1",
+    level: detectedTier,
     lastUpdatedDate: new Date().toISOString().split("T")[0],
-    pcSearch: { current: pcCurrent, max: pcMax },
-    edgeSearch: { current: edgeCurrent, max: edgeMax },
-    mobileSearch: { current: mobileCurrent, max: mobileMax }
+    startOfDayPoints: startOfDayPoints,
+    pcSearch: { current: pcCurrent, max: pcMax }
   };
 
   await chrome.storage.local.set({ stats });

@@ -19,7 +19,7 @@
         </div>
         <div class="logo-text">
           <h1>Rewards <span class="text-glow">Auto</span></h1>
-          <span class="version">v3.1</span>
+          <span class="version">v4.1.0</span>
         </div>
       </div>
       <div class="status-badge" id="global-status">
@@ -147,6 +147,10 @@
                 <span class="detail-val" id="session-speed">- búsquedas/min</span>
               </div>
             </div>
+            <div class="detail-item" id="session-tabs-row" style="display: none;">
+              <span class="detail-label">Tabs abiertos:</span>
+              <span class="detail-val font-bold" id="session-tabs-count">0</span>
+            </div>
           </div>
 
           <div class="session-controls">
@@ -161,6 +165,22 @@
           </div>
         </div>
 
+        <!-- Activity Log Panel (Mejora 4D) -->
+        <div class="activity-panel">
+          <div class="activity-header" id="activity-header-toggle">
+            <div class="activity-title-area">
+              <span class="activity-icon">📋</span>
+              <span class="activity-title">Registro de Actividad</span>
+            </div>
+            <span class="activity-arrow" id="activity-arrow">▼</span>
+          </div>
+          <div class="activity-body collapsed" id="activity-log-body">
+            <div class="activity-log-container" id="activity-log-content">
+              <div class="log-empty-msg">Sin actividad reciente.</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Quick Launch Grid -->
         <div class="launcher-panel">
           <h3>🚀 Inicio Rápido</h3>
@@ -170,18 +190,6 @@
               <span class="launcher-label">Escritorio</span>
               <span class="launcher-sub" id="lbl-desktop-count">0 / 30</span>
               <div class="launcher-progress"><div class="launcher-progress-fill" id="progress-desktop" style="width: 0%"></div></div>
-            </button>
-            <button class="launcher-btn" id="launch-mobile" data-mode="mobile">
-              <div class="launcher-icon">📱</div>
-              <span class="launcher-label">Móvil</span>
-              <span class="launcher-sub" id="lbl-mobile-count">0 / 20</span>
-              <div class="launcher-progress"><div class="launcher-progress-fill" id="progress-mobile" style="width: 0%"></div></div>
-            </button>
-            <button class="launcher-btn" id="launch-edge" data-mode="edge">
-              <div class="launcher-icon">🌐</div>
-              <span class="launcher-label">Edge</span>
-              <span class="launcher-sub" id="lbl-edge-count">0 / 20</span>
-              <div class="launcher-progress"><div class="launcher-progress-fill" id="progress-edge" style="width: 0%"></div></div>
             </button>
             <button class="launcher-btn launcher-btn-primary" id="launch-all">
               <div class="launcher-icon">⚡</div>
@@ -229,14 +237,6 @@
               <div>
                 <label>PC</label>
                 <input type="number" id="set-desktop-searches" min="0" max="50" value="30">
-              </div>
-              <div>
-                <label>Móvil</label>
-                <input type="number" id="set-mobile-searches" min="0" max="50" value="20">
-              </div>
-              <div>
-                <label>Edge</label>
-                <input type="number" id="set-edge-searches" min="0" max="50" value="20">
               </div>
             </div>
           </div>
@@ -385,9 +385,8 @@
 
     </main>
 
-    <!-- Footer -->
     <footer class="app-footer">
-      Rewards Auto Search & Claimer v3.1 — Automatización Inteligente
+      Rewards Auto Search & Claimer v4.1.0 — Automatización Inteligente
     </footer>
   </div>
 

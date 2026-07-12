@@ -1,19 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Rewards Auto Search & Claimer",
-  "version": "3.1.0",
-  "description": "Automatiza búsquedas de escritorio y Edge en Bing, resuelve quizzes/polls, y reclama tareas diarias en rewards.bing.com.",
+  "version": "4.1.0",
+  "description": "Automatiza búsquedas y reclama puntos en Microsoft Rewards. Soporta Member, Silver y Gold.",
   "permissions": [
     "storage",
-    "declarativeNetRequest",
     "alarms",
     "tabs",
+    "debugger",
     "scripting",
     "notifications"
   ],
   "host_permissions": [
     "*://*.bing.com/*",
     "*://*.microsoft.com/*",
+    "*://rewards.bing.com/*",
     "*://trends.google.com/*"
   ],
   "background": {
@@ -35,17 +36,6 @@
     "128": "icons/icon-128.png"
   },
   "content_scripts": [
-    {
-      "matches": [
-        "*://*.bing.com/*",
-        "*://rewards.bing.com/*"
-      ],
-      "js": [
-        "spoof.js"
-      ],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
     {
       "matches": [
         "*://rewards.bing.com/*",
