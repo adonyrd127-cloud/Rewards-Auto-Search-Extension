@@ -1,4 +1,4 @@
-# Historial de Cambios — Rewards Auto Search & Claimer v4.1.0
+# Historial de Cambios — Rewards Auto Search & Claimer v4.2.0
 
 Este documento detalla de forma quirúrgica las mejoras implementadas en la extensión.
 

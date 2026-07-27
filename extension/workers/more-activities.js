@@ -171,6 +171,14 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
+    let section = null;
+    if (!section) {
+      // Fallback: try data-bi-* attributes (analytics hooks, rarely change)
+      section = document.querySelector('[data-bi-area="MoreActivities"]') 
+             || document.querySelector('[data-bi-id="MoreActivities"]');
+    }
+    if (section) return section;
+
     console.log(`${TAG} No se pudo localizar la sección More Activities / Seguir ganando. Retornando null.`);
     return null;
   }
@@ -479,40 +487,49 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     }
 
     for (let i = 0; i < pending.length; i++) {
-      const task = pending[i];
+      try {
+        const task = pending[i];
 
-      // Notificar progreso
-      if (typeof onProgress === 'function') {
-        try {
-          onProgress(i, pending.length, task.title);
-        } catch (cbErr) {
-          console.log(`${TAG} Error en callback onProgress:`, cbErr);
+        // Notificar progreso
+        if (typeof onProgress === 'function') {
+          try {
+            onProgress(i, pending.length, task.title);
+          } catch (cbErr) {
+            console.log(`${TAG} Error en callback onProgress:`, cbErr);
+          }
         }
+
+        console.log(`${TAG} [${i + 1}/${pending.length}] Procesando: "${task.title}" (${task.type})`);
+
+        // Abrir la actividad con clic humano simulado
+        await Retry.safeAction(async () => {
+          const el = task.element;
+
+          // Forzar apertura en pestaña nueva
+          if (el.tagName === 'A') {
+            el.setAttribute('target', '_blank');
+          }
+
+          // Simular clic con comportamiento humano
+          await Human.click(el);
+
+          // Pequeña espera para que el navegador procese el clic
+          await Human.delay(200, 400);
+        }, 2, `click-more-${i}`);
+
+        // Esperar entre 8-12 segundos para el registro de la actividad
+        // Las promos suelen necesitar solo la visita, pero esperamos lo suficiente
+        const waitTime = 8000 + Math.floor(Math.random() * 4000);
+        console.log(`${TAG}   ⏱️ Esperando ${(waitTime / 1000).toFixed(1)}s...`);
+        await Human.delay(waitTime, waitTime + 1000);
+      } catch (err) {
+        console.error(`[MoreActivities] Error processing task ${i + 1}/${pending.length}:`, err);
+        if (onProgress) {
+          onProgress({ index: i, total: pending.length, status: 'error', error: err.message });
+        }
+        // Continue with next task instead of crashing the entire worker
+        continue;
       }
-
-      console.log(`${TAG} [${i + 1}/${pending.length}] Procesando: "${task.title}" (${task.type})`);
-
-      // Abrir la actividad con clic humano simulado
-      await Retry.safeAction(async () => {
-        const el = task.element;
-
-        // Forzar apertura en pestaña nueva
-        if (el.tagName === 'A') {
-          el.setAttribute('target', '_blank');
-        }
-
-        // Simular clic con comportamiento humano
-        await Human.click(el);
-
-        // Pequeña espera para que el navegador procese el clic
-        await Human.delay(200, 400);
-      }, 2, `click-more-${i}`);
-
-      // Esperar entre 8-12 segundos para el registro de la actividad
-      // Las promos suelen necesitar solo la visita, pero esperamos lo suficiente
-      const waitTime = 8000 + Math.floor(Math.random() * 4000);
-      console.log(`${TAG}   ⏱️ Esperando ${(waitTime / 1000).toFixed(1)}s...`);
-      await Human.delay(waitTime, waitTime + 1000);
     }
 
     console.log(`${TAG} ✅ Todas las actividades extra procesadas`);

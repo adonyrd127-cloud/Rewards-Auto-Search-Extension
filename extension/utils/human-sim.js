@@ -30,6 +30,18 @@ window.RewardsUtils.Human = (function () {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
+  // Gaussian-like distribution: center-weighted but with natural spread
+  function gaussianRandom(min, max) {
+    // Box-Muller transform, clamped to [min, max]
+    let u = 0, v = 0;
+    while(u === 0) u = Math.random();
+    while(v === 0) v = Math.random();
+    let num = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    num = num / 6 + 0.5; // center around 0.5, spread ~0.17
+    num = Math.max(0.1, Math.min(0.9, num)); // clamp to avoid extreme edges
+    return min + num * (max - min);
+  }
+
   // ──────────────────────────────────────────────
   // Funciones principales
   // ──────────────────────────────────────────────
@@ -103,8 +115,8 @@ window.RewardsUtils.Human = (function () {
     // Calcular coordenadas aproximadas del centro del elemento
     // para que los eventos tengan posiciones creíbles
     const rect = element.getBoundingClientRect();
-    const x = rect.left + rect.width / 2 + randomInt(-3, 3);   // Pequeña variación
-    const y = rect.top + rect.height / 2 + randomInt(-3, 3);
+    const x = gaussianRandom(rect.left + rect.width * 0.1, rect.left + rect.width * 0.9);
+    const y = gaussianRandom(rect.top + rect.height * 0.1, rect.top + rect.height * 0.9);
 
     // Opciones base compartidas por todos los eventos del mouse
     const baseOpts = {
@@ -214,10 +226,12 @@ window.RewardsUtils.Human = (function () {
           const rect = el.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0) {
             // Dispatch mouseover/mousemove
-            el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, view: window }));
-            el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, view: window }));
+            const cx = rect.left + rect.width / 2 + (Math.random() * 10 - 5);
+            const cy = rect.top + rect.height / 2 + (Math.random() * 6 - 3);
+            el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, view: window, clientX: cx, clientY: cy }));
+            el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, view: window, clientX: cx, clientY: cy }));
             await delay(300, 800);
-            el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, view: window }));
+            el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, view: window, clientX: cx, clientY: cy }));
           }
         }
       }

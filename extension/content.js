@@ -86,6 +86,19 @@ function isCardCompleted(task) {
   return hasCheckmark;
 }
 
+// --- HTML SANITIZATION (XSS Prevention) ---
+// Escapes HTML special characters in strings before innerHTML injection.
+// Task titles/points come from Microsoft's DOM and could contain unexpected HTML.
+function escapeHTML(str) {
+  if (typeof str !== 'string') return String(str || '');
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // --- CAPTCHA DETECTION ---
 let captchaNotified = false;
 
@@ -173,10 +186,16 @@ if (document.readyState === "loading") {
   observeCaptcha();
 }
 
-// Observe dynamic insertions
+// Observe dynamic insertions (debounced to avoid CPU drain from every DOM mutation)
 function observeCaptcha() {
+  let captchaDebounceTimer = null;
   const observer = new MutationObserver(() => {
-    checkCaptcha();
+    // Debounce: only run checkCaptcha at most once every 500ms
+    if (captchaDebounceTimer) return;
+    captchaDebounceTimer = setTimeout(() => {
+      captchaDebounceTimer = null;
+      checkCaptcha();
+    }, 500);
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 }
@@ -344,6 +363,7 @@ const THEME = {
 let panelState = {
   isOpen: true,
   isMinimized: false,
+  isProcessing: false, // Guard: prevents runFullScan from overwriting tasks during active claim
   position: { x: window.innerWidth - 380, y: 80 },
   sections: {
     dailySet: { loading: true, tasks: [], expanded: true },
@@ -1215,7 +1235,7 @@ function initRewardsPanel() {
       <div class="rap-header-icon">⭐</div>
       <div>
         <span class="rap-header-title">Rewards <span>Auto</span><span class="rap-activity-dot" id="rap-activity-dot"></span></span>
-        <span class="rap-header-version">v4.1.0</span>
+        <span class="rap-header-version">v4.2.0</span>
       </div>
     </div>
     <div id="rap-header-points-container" style="display: none; align-items: center; background: rgba(255, 255, 255, 0.15); padding: 4px 10px; border-radius: 20px; margin-left: auto; margin-right: 15px; border: 1px solid rgba(255,255,255,0.1);">
@@ -1266,7 +1286,7 @@ function initRewardsPanel() {
         </svg>
         <span class="refresh-text">Escanear</span>
       </button>
-      <span>Rewards Auto v4.1.0</span>
+      <span>Rewards Auto v4.2.0</span>
     </div>
   `;
 
@@ -1542,10 +1562,10 @@ function createSection(key, config) {
       item.innerHTML = `
         <div class="rap-task-check">${checkContent}</div>
         <div class="rap-task-info">
-          <div class="rap-task-title" title="${task.title}">${task.title}</div>
-          ${task.meta ? `<div class="rap-task-meta">${task.meta}</div>` : ''}
+          <div class="rap-task-title" title="${escapeHTML(task.title)}">${escapeHTML(task.title)}</div>
+          ${task.meta ? `<div class="rap-task-meta">${escapeHTML(task.meta)}</div>` : ''}
         </div>
-        <div class="rap-task-points">${task.points}</div>
+        <div class="rap-task-points">${escapeHTML(task.points)}</div>
       `;
       
       item.addEventListener('click', () => {
@@ -1916,10 +1936,22 @@ function countPendingTasks() {
 
 // ─── Escaneo Completo de Tareas ───
 async function runFullScan() {
+  // Guard: don't overwrite task arrays while a claim is in progress
+  // This prevents the race condition where a re-scan resets processing flags and shifts indices
+  if (panelState.isProcessing) {
+    console.log('[RewardsBot] Scan skipped — claim in progress.');
+    return;
+  }
+  
   let scanAttempts = 0;
   const maxAttempts = 6;
 
   const doScan = async () => {
+    // Re-check guard at each attempt in case claiming started during a retry delay
+    if (panelState.isProcessing) {
+      console.log('[RewardsBot] Scan attempt aborted — claim started.');
+      return;
+    }
     scanAttempts++;
     console.log(`[RewardsBot] Escaneo #${scanAttempts}...`);
 
@@ -1990,6 +2022,7 @@ async function claimTask(sectionKey, taskIndex) {
   const task = panelState.sections[sectionKey].tasks[taskIndex];
   if (!task || task.completed || task.processing) return;
 
+  panelState.isProcessing = true; // Prevent scan from overwriting task arrays
   task.processing = true;
   renderSections();
   updateStatus(`Abriendo pestaña: ${task.title}...`, 'info');
@@ -2013,6 +2046,7 @@ async function claimTask(sectionKey, taskIndex) {
     showToast('Error', `No se pudo procesar: ${err.message}`, 'error');
   } finally {
     task.processing = false;
+    panelState.isProcessing = false; // Allow scans again
     runFullScan();
   }
 }
@@ -2043,6 +2077,7 @@ async function claimStreakBonus() {
 async function runClaimAll() {
   const btn = document.getElementById('rap-claim-all');
   if (!btn) return;
+  panelState.isProcessing = true; // Prevent scan from overwriting task arrays
   btn.disabled = true;
   btn.innerHTML = '<span>⏳</span><span>Procesando tareas...</span>';
   
@@ -2154,6 +2189,7 @@ async function runClaimAll() {
 
   btn.disabled = false;
   btn.innerHTML = '<span>🚀</span><span>Reclamar Todo Automáticamente</span>';
+  panelState.isProcessing = false; // Allow scans again
 
   // Redirigir/Recargar
   const isDashboard = window.location.pathname.includes("dashboard") || window.location.pathname === "/";
@@ -2332,7 +2368,7 @@ function solveActiveTasks() {
 }
 
 // ============================================================
-// HELPERS PARA MEJORAS VISUALES Y DE UX (v4.1.0)
+// HELPERS PARA MEJORAS VISUALES Y DE UX (v4.2.0)
 // ============================================================
 
 let rapAllCompleteTriggered = false;

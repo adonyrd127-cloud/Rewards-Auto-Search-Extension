@@ -81,6 +81,14 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
+    let section = null;
+    if (!section) {
+      // Fallback: try data-bi-* attributes (analytics hooks, rarely change)
+      section = document.querySelector('[data-bi-area="PunchCards"]') 
+             || document.querySelector('[data-bi-id="PunchCards"]');
+    }
+    if (section) return section;
+
     // Último recurso: retornar null
     console.log(`${TAG} No se pudo localizar la sección Punch Cards. Retornando null.`);
     return null;
@@ -242,41 +250,50 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     }
 
     for (let i = 0; i < pending.length; i++) {
-      const task = pending[i];
+      try {
+        const task = pending[i];
 
-      // Notificar progreso
-      if (typeof onProgress === 'function') {
-        try {
-          onProgress(i, pending.length, task.title);
-        } catch (cbErr) {
-          console.warn(`${TAG} Error en callback onProgress:`, cbErr);
+        // Notificar progreso
+        if (typeof onProgress === 'function') {
+          try {
+            onProgress(i, pending.length, task.title);
+          } catch (cbErr) {
+            console.warn(`${TAG} Error en callback onProgress:`, cbErr);
+          }
         }
+
+        console.log(`${TAG} [${i + 1}/${pending.length}] Procesando: "${task.title}" (paso ${task.currentStep}/${task.totalSteps})`);
+
+        // Hacer clic en la punch card para abrirla
+        await Retry.safeAction(async () => {
+          const el = task.element;
+
+          // Forzar apertura en pestaña nueva
+          if (el.tagName === 'A') {
+            el.setAttribute('target', '_blank');
+          }
+
+          await Human.click(el);
+          await Human.delay(200, 400);
+        }, 2, `click-punch-${i}`);
+
+        // Esperar más tiempo que para tareas normales, ya que las punch cards
+        // requieren navegar a una vista de detalle y completar sub-pasos
+        const waitTime = 10000 + Math.floor(Math.random() * 5000);
+        console.log(`${TAG}   ⏱️ Esperando ${(waitTime / 1000).toFixed(1)}s para que se registre el paso...`);
+        await Human.delay(waitTime, waitTime + 2000);
+
+        // Intentar buscar y completar el paso siguiente dentro de la misma página
+        // (algunas punch cards muestran todos los pasos inline)
+        await _tryCompleteInlineStep(task);
+      } catch (err) {
+        console.error(`[PunchCards] Error processing task ${i + 1}/${pending.length}:`, err);
+        if (onProgress) {
+          onProgress({ index: i, total: pending.length, status: 'error', error: err.message });
+        }
+        // Continue with next task instead of crashing the entire worker
+        continue;
       }
-
-      console.log(`${TAG} [${i + 1}/${pending.length}] Procesando: "${task.title}" (paso ${task.currentStep}/${task.totalSteps})`);
-
-      // Hacer clic en la punch card para abrirla
-      await Retry.safeAction(async () => {
-        const el = task.element;
-
-        // Forzar apertura en pestaña nueva
-        if (el.tagName === 'A') {
-          el.setAttribute('target', '_blank');
-        }
-
-        await Human.click(el);
-        await Human.delay(200, 400);
-      }, 2, `click-punch-${i}`);
-
-      // Esperar más tiempo que para tareas normales, ya que las punch cards
-      // requieren navegar a una vista de detalle y completar sub-pasos
-      const waitTime = 10000 + Math.floor(Math.random() * 5000);
-      console.log(`${TAG}   ⏱️ Esperando ${(waitTime / 1000).toFixed(1)}s para que se registre el paso...`);
-      await Human.delay(waitTime, waitTime + 2000);
-
-      // Intentar buscar y completar el paso siguiente dentro de la misma página
-      // (algunas punch cards muestran todos los pasos inline)
-      await _tryCompleteInlineStep(task);
     }
 
     console.log(`${TAG} ✅ Todas las punch cards procesadas`);

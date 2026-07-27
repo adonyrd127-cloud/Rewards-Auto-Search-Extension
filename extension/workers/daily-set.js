@@ -44,6 +44,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    * @returns {Element|null} — el elemento sección padre, o null si no se encuentra
    */
   function _findDailySetSection() {
+    let section = null;
     // Buscar encabezados con texto que coincida
     const headings = DOM.deepQueryAll(document.body, 'h2, h3, h4, [class*="heading"], [class*="title"], mee-card-group');
 
@@ -63,9 +64,18 @@ window.RewardsWorkers = window.RewardsWorkers || {};
             break;
           }
         }
-        return container;
+        section = container;
+        break;
       }
     }
+
+    if (!section) {
+      // Fallback: try data-bi-* attributes (analytics hooks, rarely change)
+      section = document.querySelector('[data-bi-area="DailySet"]') 
+             || document.querySelector('[data-bi-id="DailySet"]');
+    }
+
+    if (section) return section;
 
     // Fallback: buscar por atributos data comunes de la plataforma
     const fallbackSelectors = [
@@ -235,43 +245,52 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     }
 
     for (let i = 0; i < pending.length; i++) {
-      const task = pending[i];
+      try {
+        const task = pending[i];
 
-      // Notificar progreso al callback si existe
-      if (typeof onProgress === 'function') {
-        try {
-          onProgress(i, pending.length, task.title);
-        } catch (cbErr) {
-          console.log(`${TAG} Error en callback onProgress:`, cbErr);
+        // Notificar progreso al callback si existe
+        if (typeof onProgress === 'function') {
+          try {
+            onProgress(i, pending.length, task.title);
+          } catch (cbErr) {
+            console.log(`${TAG} Error en callback onProgress:`, cbErr);
+          }
         }
+
+        console.log(`${TAG} [${i + 1}/${pending.length}] Procesando: "${task.title}" (${task.type})`);
+
+        // Ejecutar el clic con reintentos para manejar tarjetas que
+        // aún no terminaron de renderizar
+        await Retry.safeAction(async () => {
+          const el = task.element;
+
+          // Asegurar que se abra en pestaña nueva
+          if (el.tagName === 'A') {
+            el.setAttribute('target', '_blank');
+          }
+
+          // Clic humano simulado (incluye movimiento de ratón y disparo de eventos)
+          await Human.click(el);
+
+          // Fallback: si el clic simulado no abrió pestaña, usar window.open
+          // Esperamos 300ms para dar tiempo al navegador
+          await Human.delay(200, 400);
+
+        }, 2, `click-daily-${i}`);
+
+        // Esperar entre 8-12 segundos para que Microsoft registre la actividad
+        // y el auto-solver tenga tiempo de resolver quizzes/polls
+        const waitTime = 8000 + Math.floor(Math.random() * 4000);
+        console.log(`${TAG}   ⏱️ Esperando ${(waitTime / 1000).toFixed(1)}s antes de la siguiente tarea...`);
+        await Human.delay(waitTime, waitTime + 1000);
+      } catch (err) {
+        console.error(`[DailySet] Error processing task ${i + 1}/${pending.length}:`, err);
+        if (onProgress) {
+          onProgress({ index: i, total: pending.length, status: 'error', error: err.message });
+        }
+        // Continue with next task instead of crashing the entire worker
+        continue;
       }
-
-      console.log(`${TAG} [${i + 1}/${pending.length}] Procesando: "${task.title}" (${task.type})`);
-
-      // Ejecutar el clic con reintentos para manejar tarjetas que
-      // aún no terminaron de renderizar
-      await Retry.safeAction(async () => {
-        const el = task.element;
-
-        // Asegurar que se abra en pestaña nueva
-        if (el.tagName === 'A') {
-          el.setAttribute('target', '_blank');
-        }
-
-        // Clic humano simulado (incluye movimiento de ratón y disparo de eventos)
-        await Human.click(el);
-
-        // Fallback: si el clic simulado no abrió pestaña, usar window.open
-        // Esperamos 300ms para dar tiempo al navegador
-        await Human.delay(200, 400);
-
-      }, 2, `click-daily-${i}`);
-
-      // Esperar entre 8-12 segundos para que Microsoft registre la actividad
-      // y el auto-solver tenga tiempo de resolver quizzes/polls
-      const waitTime = 8000 + Math.floor(Math.random() * 4000);
-      console.log(`${TAG}   ⏱️ Esperando ${(waitTime / 1000).toFixed(1)}s antes de la siguiente tarea...`);
-      await Human.delay(waitTime, waitTime + 1000);
     }
 
     console.log(`${TAG} ✅ Todas las tareas diarias procesadas`);
