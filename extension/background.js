@@ -769,7 +769,7 @@ async function runSessionLoop(session) {
         await chrome.scripting.executeScript({
           target: { tabId: session.tabId },
           func: (searchQuery, fallbackUrl) => {
-             const input = document.querySelector('textarea[name="q"], input[name="q"]');
+             const input = document.querySelector('textarea[name="q"], input[name="q"], #sb_form_q');
              if (!input) {
                 // Si no hay barra de búsqueda (ej. la página no cargó bien), navegar directo
                 window.location.href = fallbackUrl;
@@ -779,6 +779,7 @@ async function runSessionLoop(session) {
              // Enfocar y limpiar la barra
              input.focus();
              input.value = "";
+             input.dispatchEvent(new Event('input', { bubbles: true }));
              
              // Simular escritura letra por letra
              let i = 0;
@@ -787,24 +788,54 @@ async function runSessionLoop(session) {
                    input.value += searchQuery.charAt(i);
                    input.dispatchEvent(new Event('input', { bubbles: true }));
                    i++;
-                   // Retraso humano entre teclas (40 a 120ms)
-                   setTimeout(typeNext, 40 + Math.random() * 80);
+                   // Retraso humano entre teclas (25 a 75ms)
+                   setTimeout(typeNext, 25 + Math.random() * 50);
                 } else {
                    // Esperar un poquito antes de presionar enter/buscar
                    setTimeout(() => {
-                      const form = input.closest('form');
+                      input.dispatchEvent(new Event('change', { bubbles: true }));
+                      
+                      const form = input.closest('form') || document.querySelector('form#sb_form');
+                      let submitted = false;
+
                       if (form) {
-                         const btn = form.querySelector('input[type="submit"], button[type="submit"], #search_icon');
-                         if (btn) btn.click();
-                         else form.submit();
-                      } else {
-                         // Fallback presionando Enter
-                         const e = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter", keyCode: 13 });
-                         input.dispatchEvent(e);
-                         // Fallback final si no funciona nada
-                         setTimeout(() => { window.location.href = fallbackUrl; }, 1000);
+                         const btn = form.querySelector('input[type="submit"], button[type="submit"], #sb_form_go, label[for="sb_form_go"], #search_icon');
+                         if (btn) {
+                            try {
+                               btn.click();
+                               submitted = true;
+                            } catch(e) {}
+                         }
+                         if (!submitted && typeof form.requestSubmit === 'function') {
+                            try {
+                               form.requestSubmit();
+                               submitted = true;
+                            } catch(e) {}
+                         }
+                         if (!submitted) {
+                            try {
+                               form.submit();
+                               submitted = true;
+                            } catch(e) {}
+                         }
                       }
-                   }, 300 + Math.random() * 400);
+
+                      // Presionar Enter como fallback adicional
+                      try {
+                         const enterOpts = { bubbles: true, cancelable: true, key: "Enter", code: "Enter", keyCode: 13, which: 13 };
+                         input.dispatchEvent(new KeyboardEvent("keydown", enterOpts));
+                         input.dispatchEvent(new KeyboardEvent("keypress", enterOpts));
+                         input.dispatchEvent(new KeyboardEvent("keyup", enterOpts));
+                      } catch(e) {}
+
+                      // Fallback INFALIBLE: Si después de 600ms la página no ha cambiado de URL, forzar navegación a fallbackUrl
+                      const currentHref = window.location.href;
+                      setTimeout(() => {
+                         if (window.location.href === currentHref) {
+                            window.location.href = fallbackUrl;
+                         }
+                      }, 600);
+                   }, 200 + Math.random() * 200);
                 }
              }
              typeNext();
