@@ -278,17 +278,14 @@ if (isSearchPage) {
       console.log(`[RewardsBot] Bing Search Page. Estado sesión: ${session.status}, isRewardsTaskTab: ${isRewardsTask}`);
 
       if (isRunning || isRewardsTask) {
-        console.log("[RewardsBot] Condición cumplida (sesión activa o tarea de Rewards). Iniciando auto-solver y lectura...");
-        setTimeout(solveActiveTasks, 2500);
+        console.log("[RewardsBot] Condición cumplida (sesión activa o tarea de Rewards). Iniciando interacción humana y auto-solver...");
         
-        // Simular lectura aleatoria para parecer más humano (solo 50% de las veces)
-        if (Math.random() > 0.5) {
-          setTimeout(() => {
-            if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateReading) {
-              window.RewardsUtils.Human.simulateReading();
-            }
-          }, 1500);
+        // Simular interacciones humanas completas (scroll en resultados, mouse moves y hovers)
+        if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateSearchPageInteractions) {
+          window.RewardsUtils.Human.simulateSearchPageInteractions().catch(() => {});
         }
+
+        setTimeout(solveActiveTasks, 2500);
 
         // Si es una tarea de rewards, iniciar el monitoreo para cerrar la pestaña cuando termine
         if (isRewardsTask) {

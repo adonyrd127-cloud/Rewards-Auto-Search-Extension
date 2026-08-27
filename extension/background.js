@@ -19,7 +19,9 @@ const DEFAULT_SETTINGS = {
   scheduleTime: "09:00",
   scheduleEnabled: false,
   activeDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-  autoStartNextMode: true
+  autoStartNextMode: true,
+  runSearchesInActiveTab: true, // Ejecuta búsquedas en pestaña activa (Garantiza 100% de puntos)
+  cooldown15MinBatch: false // Modo Cooldown de 15 min (4 búsquedas por lote)
 };
 
 // Default session state
@@ -837,7 +839,7 @@ async function runSessionLoop(session) {
       // Create the search tab safely (prevents "No current window" error)
       const tab = await createTabSafe({
         url: "https://www.bing.com/#ua=" + session.mode,
-        active: false // runs in background
+        active: settings.runSearchesInActiveTab !== false
       });
 
       if (!tab || !tab.id) {
@@ -1011,6 +1013,20 @@ async function runSessionLoop(session) {
       // Check if finished
       if (session.currentIndex >= session.totalSearches) {
         break;
+      }
+
+      // 15-Minute Cooldown Batching (4 búsquedas cada 15 min para cuentas con restricción de Microsoft)
+      if (settings.cooldown15MinBatch && session.completedSearches > 0 && session.completedSearches % 4 === 0) {
+        const cooldownMs = 15 * 60 * 1000; // 15 minutos
+        console.log(`[15-Min Cooldown] Lote de 4 búsquedas completado. Pausando 15 minutos para desbloquear siguiente lote de Microsoft...`);
+        await appendActivityLog(`⏳ Cooldown de 15m activo: Pausando 15 min antes del siguiente lote (${session.completedSearches}/${session.totalSearches})`);
+        
+        const startCooldown = Date.now();
+        while (Date.now() - startCooldown < cooldownMs) {
+          const cached = inMemorySession;
+          if (!cached || cached.status === "stopped") break;
+          await new Promise(r => setTimeout(r, 2000));
+        }
       }
 
       // Calculate delay using a non-uniform distribution:

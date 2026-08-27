@@ -39,6 +39,8 @@ const setMaxDelay = document.getElementById('set-max-delay');
 const setEnableRandomDelay = document.getElementById('set-enable-random-delay');
 const setCooldown = document.getElementById('set-cooldown');
 const setAutoClose = document.getElementById('set-auto-close');
+const setRunActiveTab = document.getElementById('set-run-active-tab');
+const setCooldown15min = document.getElementById('set-cooldown-15min');
 const setWebhookUrl = document.getElementById('set-webhook-url');
 const querySourceRadios = document.getElementsByName('querySource');
 const customQueriesArea = document.getElementById('custom-queries-area');
@@ -196,6 +198,8 @@ async function loadAllData() {
     setEnableRandomDelay.checked = settings.enableRandomDelay ?? true;
     setCooldown.value = settings.cooldownBetweenSearches ?? 2;
     setAutoClose.checked = settings.autoCloseTabs ?? true;
+    if (setRunActiveTab) setRunActiveTab.checked = settings.runSearchesInActiveTab ?? true;
+    if (setCooldown15min) setCooldown15min.checked = settings.cooldown15MinBatch ?? false;
     if (setWebhookUrl) setWebhookUrl.value = settings.webhookUrl || '';
     
     // Label display counts on launcher
@@ -665,6 +669,8 @@ function setupActionListeners() {
       enableRandomDelay: setEnableRandomDelay.checked,
       cooldownBetweenSearches: parseInt(setCooldown.value) || 2,
       autoCloseTabs: setAutoClose.checked,
+      runSearchesInActiveTab: setRunActiveTab ? setRunActiveTab.checked : true,
+      cooldown15MinBatch: setCooldown15min ? setCooldown15min.checked : false,
       webhookUrl: setWebhookUrl ? setWebhookUrl.value.trim() : '',
       querySource,
       customQueries: setCustomQueries.value
