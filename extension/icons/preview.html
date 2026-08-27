@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rewards Auto Icons — Style Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --border: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.25);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 32px 24px;
+      min-height: 100vh;
+    }
+    header {
+      max-width: 1000px;
+      margin: 0 auto 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: 24px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+    .badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .spec-summary {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .spec-item {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 8px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin: 32px 0 16px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 14px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .icon-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .icon-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px var(--accent-glow);
+    }
+    .icon-display {
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-align: center;
+      word-break: break-all;
+    }
+    .light-section {
+      background: #f8fafc;
+      color: #0f172a;
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 36px;
+      max-width: 1000px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .light-section .icon-card {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .light-section .icon-card:hover {
+      border-color: #059669;
+      box-shadow: 0 6px 16px rgba(5,150,105,0.15);
+    }
+    .light-section .icon-display {
+      color: #0284c7;
+    }
+    .light-section .icon-name {
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Rewards Auto Icon Set <span class="badge">30 SVGs</span></h1>
+    <div class="spec-summary">
+      <div class="spec-item"><strong>Preset:</strong> Clean</div>
+      <div class="spec-item"><strong>Grid:</strong> 24×24px</div>
+      <div class="spec-item"><strong>Stroke:</strong> 1.8px (round / round)</div>
+      <div class="spec-item"><strong>Color:</strong> currentColor</div>
+      <div class="spec-item"><strong>Corner Radius:</strong> 2px</div>
+    </div>
+  </header>
+
+  <main style="max-width: 1000px; margin: 0 auto;">
+    <h2 class="section-title">Dark Theme (Native 24px & 48px Display)</h2>
+    <div class="icon-grid">
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" />
+            </svg>
+          </div>
+          <span class="icon-name">dashboard</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </div>
+          <span class="icon-name">settings</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
+            </svg>
+          </div>
+          <span class="icon-name">schedule</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+          </div>
+          <span class="icon-name">history</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+          </div>
+          <span class="icon-name">star</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8.5 14.5A3.5 3.5 0 0 0 12 18a3.5 3.5 0 0 0 3.5-3.5c0-2-1.5-3.5-2.5-5-.5 1-1 1.5-1.5 1.5s-.8-.5-.8-1.2c0-2.3 2-4.8 2.8-6.8-3 1.2-5.5 4.5-5.5 8 0 .5.1 1 .2 1.5z" /><path d="M12 22a8 8 0 0 0 8-8c0-4-2.5-7.5-5.5-10.5-1 1.8-2 3.5-2 5.5 0 1.5.8 2.8 1.5 4-1.5 0-3-1-3.5-2.5-1 1.5-1.5 3-1.5 4.5 0 1.2.4 2.3 1 3.2A5.8 5.8 0 0 1 6 14c0-3.2 2-6 4.5-8.2C7 8 4 11.5 4 15.5A8 8 0 0 0 12 22z" />
+            </svg>
+          </div>
+          <span class="icon-name">flame</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2" /><path d="M18 9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2" /><path d="M4 3h16v6a7 7 0 0 1-14 0V3z" /><path d="M12 16v5" /><path d="M8 21h8" />
+            </svg>
+          </div>
+          <span class="icon-name">trophy</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+          </div>
+          <span class="icon-name">zap</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+          </div>
+          <span class="icon-name">monitor</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" rx="1" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+            </svg>
+          </div>
+          <span class="icon-name">gift</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="6 3 20 12 6 21 6 3" />
+            </svg>
+          </div>
+          <span class="icon-name">play</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="4" width="4" height="16" rx="1" /><rect x="15" y="4" width="4" height="16" rx="1" />
+            </svg>
+          </div>
+          <span class="icon-name">pause</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+            </svg>
+          </div>
+          <span class="icon-name">stop</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+            </svg>
+          </div>
+          <span class="icon-name">refresh</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </div>
+          <span class="icon-name">trash</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <span class="icon-name">check</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <span class="icon-name">clock</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <span class="icon-name">alert-circle</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </div>
+          <span class="icon-name">external-link</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+          <span class="icon-name">chevron-down</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+          </div>
+          <span class="icon-name">chevron-up</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+          </div>
+          <span class="icon-name">activity</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
+            </svg>
+          </div>
+          <span class="icon-name">save</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </div>
+          <span class="icon-name">shield</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+          </div>
+          <span class="icon-name">bell</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </div>
+          <span class="icon-name">search</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </div>
+          <span class="icon-name">minus</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </div>
+          <span class="icon-name">x</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" />
+            </svg>
+          </div>
+          <span class="icon-name">wifi</span>
+        </div>
+      
+        <div class="icon-card">
+          <div class="icon-display">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v3m0 12v3M3 12h3m12 0h3m-2.4-6.6-2.1 2.1m-9 9-2.1 2.1m0-13.2 2.1 2.1m9 9 2.1 2.1" /><circle cx="12" cy="12" r="3" />
+            </svg>
+          </div>
+          <span class="icon-name">sparkles</span>
+        </div>
+      
+    </div>
+
+    <div class="light-section">
+      <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 16px; color: #0f172a;">Light Theme Contrast Check</h2>
+      <div class="icon-grid">
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" />
+              </svg>
+            </div>
+            <span class="icon-name">dashboard</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </div>
+            <span class="icon-name">settings</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
+              </svg>
+            </div>
+            <span class="icon-name">schedule</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+            </div>
+            <span class="icon-name">history</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            </div>
+            <span class="icon-name">star</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8.5 14.5A3.5 3.5 0 0 0 12 18a3.5 3.5 0 0 0 3.5-3.5c0-2-1.5-3.5-2.5-5-.5 1-1 1.5-1.5 1.5s-.8-.5-.8-1.2c0-2.3 2-4.8 2.8-6.8-3 1.2-5.5 4.5-5.5 8 0 .5.1 1 .2 1.5z" /><path d="M12 22a8 8 0 0 0 8-8c0-4-2.5-7.5-5.5-10.5-1 1.8-2 3.5-2 5.5 0 1.5.8 2.8 1.5 4-1.5 0-3-1-3.5-2.5-1 1.5-1.5 3-1.5 4.5 0 1.2.4 2.3 1 3.2A5.8 5.8 0 0 1 6 14c0-3.2 2-6 4.5-8.2C7 8 4 11.5 4 15.5A8 8 0 0 0 12 22z" />
+              </svg>
+            </div>
+            <span class="icon-name">flame</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2" /><path d="M18 9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2" /><path d="M4 3h16v6a7 7 0 0 1-14 0V3z" /><path d="M12 16v5" /><path d="M8 21h8" />
+              </svg>
+            </div>
+            <span class="icon-name">trophy</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            </div>
+            <span class="icon-name">zap</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+            </div>
+            <span class="icon-name">monitor</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" rx="1" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+              </svg>
+            </div>
+            <span class="icon-name">gift</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="6 3 20 12 6 21 6 3" />
+              </svg>
+            </div>
+            <span class="icon-name">play</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="4" width="4" height="16" rx="1" /><rect x="15" y="4" width="4" height="16" rx="1" />
+              </svg>
+            </div>
+            <span class="icon-name">pause</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+              </svg>
+            </div>
+            <span class="icon-name">stop</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+              </svg>
+            </div>
+            <span class="icon-name">refresh</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </div>
+            <span class="icon-name">trash</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <span class="icon-name">check</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" /><polyline points="12 6 12 12 16 14" />
+              </svg>
+            </div>
+            <span class="icon-name">clock</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <span class="icon-name">alert-circle</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </div>
+            <span class="icon-name">external-link</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+            <span class="icon-name">chevron-down</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15" />
+              </svg>
+            </div>
+            <span class="icon-name">chevron-up</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+            </div>
+            <span class="icon-name">activity</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
+              </svg>
+            </div>
+            <span class="icon-name">save</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+            <span class="icon-name">shield</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </div>
+            <span class="icon-name">bell</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <span class="icon-name">search</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </div>
+            <span class="icon-name">minus</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </div>
+            <span class="icon-name">x</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" />
+              </svg>
+            </div>
+            <span class="icon-name">wifi</span>
+          </div>
+        
+          <div class="icon-card">
+            <div class="icon-display">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v3m0 12v3M3 12h3m12 0h3m-2.4-6.6-2.1 2.1m-9 9-2.1 2.1m0-13.2 2.1 2.1m9 9 2.1 2.1" /><circle cx="12" cy="12" r="3" />
+              </svg>
+            </div>
+            <span class="icon-name">sparkles</span>
+          </div>
+        
+      </div>
+    </div>
+  </main>
+</body>
+</html>

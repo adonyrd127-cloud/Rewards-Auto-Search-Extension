@@ -1,3 +1,7 @@
+// ═══════════════════════════════════════════════════════════════
+// Rewards Auto Search & Claimer — Popup Logic v4.2
+// ═══════════════════════════════════════════════════════════════
+
 // Elements
 const tabButtons = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
@@ -22,17 +26,14 @@ const btnStop = document.getElementById('btn-stop');
 
 // Launcher Elements
 const btnLaunchDesktop = document.getElementById('launch-desktop');
-// Mobile elements removed
 const btnLaunchAll = document.getElementById('launch-all');
 const btnLaunchDailyTasks = document.getElementById('launch-daily-tasks');
 const lblDesktopCount = document.getElementById('lbl-desktop-count');
-// Mobile label count removed
 const btnRefreshPoints = document.getElementById('btn-refresh-points');
 
 // Settings Form Elements
 const settingsForm = document.getElementById('settings-form');
 const setDesktopSearches = document.getElementById('set-desktop-searches');
-// Mobile settings input removed
 const setMinDelay = document.getElementById('set-min-delay');
 const setMaxDelay = document.getElementById('set-max-delay');
 const setEnableRandomDelay = document.getElementById('set-enable-random-delay');
@@ -54,7 +55,7 @@ const dayCheckboxes = document.querySelectorAll('.days-selector input');
 const historyRows = document.getElementById('history-rows');
 const btnClearHistory = document.getElementById('btn-clear-history');
 
-// Activity Log Elements (Mejora 4D)
+// Activity Log Elements
 const activityHeaderToggle = document.getElementById('activity-header-toggle');
 const activityLogBody = document.getElementById('activity-log-body');
 const activityLogContent = document.getElementById('activity-log-content');
@@ -62,10 +63,12 @@ const activityArrow = document.getElementById('activity-arrow');
 
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
-  // Refrescar automáticamente si hay cambios en background
+  // Refrescar automáticamente si hay cambios en storage local
   chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'local' && changes.stats) {
-      loadAllData();
+    if (namespace === 'local') {
+      if (changes.stats || changes.session || changes.scannedTasks) {
+        loadAllData();
+      }
     }
   });
 
@@ -80,7 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load configuration and data
   await loadAllData();
 
-  // Load and render activity logs (Mejora 4D)
+  // Load and render activity logs
   const logsData = await chrome.storage.local.get(["activityLog", "activityPanelExpanded"]);
   renderActivityLogs(logsData.activityLog || []);
   if (logsData.activityPanelExpanded && activityLogBody && activityArrow) {
@@ -113,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Bind Actions
   setupActionListeners();
 
-  // Trigger on-demand sync with Microsoft Rewards API
+  // Trigger on-demand sync with Microsoft Rewards API in background
   chrome.runtime.sendMessage({ action: "syncPoints" }, (res) => {
     if (res && res.success) {
       loadAllData();
@@ -127,7 +130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   chrome.runtime.onMessage.addListener((message) => {
     if (message.action === "sessionUpdate") {
       updateDashboard();
-      loadAllData(); // Refresh history/stats
+      loadAllData();
     }
     if (message.action === "sessionSkipped") {
       showToast(`${message.mode.toUpperCase()} omitido: ¡Búsquedas ya completadas hoy!`, false);
@@ -152,14 +155,13 @@ function switchTab(tabId) {
 
 // Bind show/hide fields
 function setupUIInteractionToggles() {
-  // Query source toggling
   const toggleQueryArea = () => {
-    const selectedSource = document.querySelector('input[name="querySource"]:checked').value;
+    const selectedRadio = document.querySelector('input[name="querySource"]:checked');
+    const selectedSource = selectedRadio ? selectedRadio.value : "random";
     customQueriesArea.style.display = selectedSource === "custom" ? "block" : "none";
   };
   querySourceRadios.forEach(radio => radio.addEventListener('change', toggleQueryArea));
 
-  // Schedule config toggling
   const toggleScheduleArea = () => {
     scheduleConfigArea.style.display = setScheduleEnabled.checked ? "block" : "none";
   };
@@ -177,18 +179,18 @@ async function loadAllData() {
 
   // Update Stats UI
   let levelText = stats.level || "Nivel 1";
-  if (levelText.toLowerCase().includes("level2") || levelText === "Level 2") levelText = "Nivel 2";
-  else if (levelText.toLowerCase().includes("level1") || levelText === "Level 1") levelText = "Nivel 1";
+  if (levelText.toLowerCase().includes("level2") || levelText === "Level 2" || levelText === "Silver") levelText = "Nivel 2";
+  else if (levelText.toLowerCase().includes("gold")) levelText = "Nivel Gold";
+  else if (levelText.toLowerCase().includes("level1") || levelText === "Level 1" || levelText === "Member") levelText = "Nivel 1";
     
-  statTodayPoints.innerText = stats.todayPoints || 0;
-  statStreak.innerText = stats.streak || 0;
-  statTotalPoints.innerText = stats.totalPoints || 0;
+  statTodayPoints.innerText = stats.todayPoints ?? 0;
+  statStreak.innerText = stats.streak ?? 0;
+  statTotalPoints.innerText = stats.totalPoints ?? 0;
   if (statLevel) statLevel.innerText = levelText;
 
   // Pre-populate settings form
   if (settings) {
     setDesktopSearches.value = settings.desktopSearches ?? 30;
-    // Mobile settings prepopulate removed
     setMinDelay.value = settings.minDelay ?? 6;
     setMaxDelay.value = settings.maxDelay ?? 15;
     setEnableRandomDelay.checked = settings.enableRandomDelay ?? true;
@@ -203,17 +205,14 @@ async function loadAllData() {
     updateLauncherProgress('desktop', pcCurrent, pcMax);
     updateLauncherCompletion('desktop', pcCurrent, pcMax);
 
-    // Mobile count label and progress removed
-
-
     // Update Circular Progress Rings
-    const totalMaxSearchPoints = pcMax;
-    updateCircularProgress('ring-today', stats.todayPoints || 0, totalMaxSearchPoints || 90);
+    const totalMaxSearchPoints = pcMax || 90;
+    updateCircularProgress('ring-today', stats.todayPoints || 0, totalMaxSearchPoints);
 
     // Update Weekly Streak mini-bar
     const streakBar = document.getElementById('streak-bar');
     if (streakBar) {
-      const streakPct = Math.min((stats.streak / 7) * 100, 100);
+      const streakPct = Math.min(((stats.streak || 0) / 7) * 100, 100);
       streakBar.style.width = `${streakPct}%`;
     }
 
@@ -253,8 +252,8 @@ async function loadAllData() {
 
 // Render history rows
 function renderHistory(history) {
-  if (history.length === 0) {
-    historyRows.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">Sin historial aún.</td></tr>`;
+  if (!history || history.length === 0) {
+    historyRows.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">Sin historial registrado aún.</td></tr>`;
     return;
   }
 
@@ -262,16 +261,17 @@ function renderHistory(history) {
     const dateObj = new Date(item.date);
     const dateStr = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     const timeStr = dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    const modeLabel = item.mode === 'desktop' ? 'PC' : (item.mode || 'Auto');
     
     return `
       <tr>
         <td>
-          <div>${dateStr}</div>
-          <div class="text-muted" style="font-size: 9px;">${timeStr}</div>
+          <div style="font-weight:600;">${dateStr}</div>
+          <div class="text-muted" style="font-size: 9.5px;">${timeStr}</div>
         </td>
-        <td><span class="history-badge ${item.mode}">${item.mode}</span></td>
+        <td><span class="badge" style="color:var(--cyan); border-color:rgba(6,182,212,0.3); background:var(--cyan-dim);">${modeLabel}</span></td>
         <td>${item.searches}</td>
-        <td class="text-green font-bold">+${item.points} pts</td>
+        <td class="text-green" style="font-weight:700;">+${item.points} pts</td>
       </tr>
     `;
   }).join('');
@@ -284,25 +284,25 @@ async function updateDashboard() {
   updateDailyTasksUI(data.scannedTasks);
 }
 
-// Update circular progress ring offset
+// Update circular progress ring offset dynamically
 function updateCircularProgress(elementId, value, max) {
   const circle = document.getElementById(elementId);
   if (!circle) return;
   
-  const circumference = 2 * Math.PI * 42; // r=42
+  const r = parseFloat(circle.getAttribute('r')) || 40;
+  const circumference = 2 * Math.PI * r;
   const percent = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   const offset = circumference - (percent / 100) * circumference;
   
   circle.style.strokeDasharray = `${circumference}`;
   circle.style.strokeDashoffset = offset;
   
-  // Color based on completion
   if (percent >= 100) {
     circle.style.stroke = '#10b981';
   } else if (percent >= 50) {
     circle.style.stroke = '#f59e0b';
   } else {
-    circle.style.stroke = '#3b82f6';
+    circle.style.stroke = '#06b6d4';
   }
 }
 
@@ -317,7 +317,7 @@ function updateLauncherProgress(mode, current, max) {
   if (percent >= 100) {
     fill.style.background = 'linear-gradient(90deg, #10b981, #34d399)';
   } else {
-    fill.style.background = 'linear-gradient(90deg, #3b82f6, #60a5fa)';
+    fill.style.background = 'linear-gradient(90deg, #06b6d4, #3b82f6)';
   }
 }
 
@@ -331,40 +331,43 @@ function updateSessionVisualState(session) {
   
   panel.classList.remove('running', 'paused', 'idle');
   
-  if (session.status === 'running') {
+  if (session && session.status === 'running') {
     panel.classList.add('running');
-    if (icon) icon.innerText = '⚡';
+    if (icon) icon.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>`;
     if (title) title.innerText = 'Automatización Activa';
-  } else if (session.status === 'paused') {
+  } else if (session && session.status === 'paused') {
     panel.classList.add('paused');
-    if (icon) icon.innerText = '⏸️';
+    if (icon) icon.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="4" height="16" rx="1" /><rect x="15" y="4" width="4" height="16" rx="1" /></svg>`;
     if (title) title.innerText = 'Automatización Pausada';
   } else {
     panel.classList.add('idle');
-    if (icon) icon.innerText = '🤖';
+    if (icon) icon.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>`;
     if (title) title.innerText = 'Automatización Inactiva';
   }
 }
 
-// Render Daily Tasks mini status checklist
+// Render Daily Tasks mini status checklist with SVG icons
 function updateDailyTasksUI(scannedTasks) {
   const list = document.getElementById('daily-tasks-list');
   const countBadge = document.getElementById('daily-tasks-count');
   if (!list) return;
+
+  const checkIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>`;
+  const clockIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><polyline points="12 6 12 12 16 14" /></svg>`;
   
   if (!scannedTasks || (!scannedTasks.dailySet && !scannedTasks.moreActivities && !scannedTasks.punchCards)) {
     list.innerHTML = `
       <div class="task-item pending">
-        <span class="task-icon">⏳</span>
-        <span class="task-name">Daily Set (No detectado)</span>
+        <span class="task-icon">${clockIcon}</span>
+        <span class="task-name">Daily Set (Sin escanear)</span>
       </div>
       <div class="task-item pending">
-        <span class="task-icon">⏳</span>
-        <span class="task-name">More Activities (No detectado)</span>
+        <span class="task-icon">${clockIcon}</span>
+        <span class="task-name">More Activities (Sin escanear)</span>
       </div>
       <div class="task-item pending">
-        <span class="task-icon">⏳</span>
-        <span class="task-name">Punch Cards (No detectado)</span>
+        <span class="task-icon">${clockIcon}</span>
+        <span class="task-name">Punch Cards (Sin escanear)</span>
       </div>
     `;
     if (countBadge) {
@@ -396,30 +399,29 @@ function updateDailyTasksUI(scannedTasks) {
     countBadge.innerText = `${completedTasks}/${totalTasks}`;
     if (completedTasks === totalTasks && totalTasks > 0) {
       countBadge.style.color = '#10b981';
-      countBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+      countBadge.style.background = 'rgba(16, 185, 129, 0.12)';
+      countBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
     } else {
       countBadge.style.color = '#f59e0b';
-      countBadge.style.background = 'rgba(245, 158, 11, 0.1)';
+      countBadge.style.background = 'rgba(245, 158, 11, 0.12)';
+      countBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
     }
   }
   
-  // Build Daily Set item
   const dsPending = dailySet.filter(t => !t.completed).length;
-  const dsText = dailySet.length === 0 ? "Daily Set (No detectado)" : `Daily Set (${dailySet.length - dsPending}/${dailySet.length})`;
+  const dsText = dailySet.length === 0 ? "Daily Set (Sin actividades)" : `Daily Set (${dailySet.length - dsPending}/${dailySet.length})`;
   const dsClass = dailySet.length === 0 ? "pending" : (dsPending === 0 ? "completed" : "pending");
-  const dsIcon = dailySet.length === 0 ? "⏳" : (dsPending === 0 ? "✅" : "⏳");
+  const dsIcon = (dailySet.length > 0 && dsPending === 0) ? checkIcon : clockIcon;
   
-  // Build More Activities item
   const maPending = moreActivities.filter(t => !t.completed).length;
-  const maText = moreActivities.length === 0 ? "More Activities (No detectado)" : `More Activities (${moreActivities.length - maPending}/${moreActivities.length})`;
+  const maText = moreActivities.length === 0 ? "More Activities (Sin actividades)" : `More Activities (${moreActivities.length - maPending}/${moreActivities.length})`;
   const maClass = moreActivities.length === 0 ? "pending" : (maPending === 0 ? "completed" : "pending");
-  const maIcon = moreActivities.length === 0 ? "⏳" : (maPending === 0 ? "✅" : "⏳");
+  const maIcon = (moreActivities.length > 0 && maPending === 0) ? checkIcon : clockIcon;
   
-  // Build Punch Cards item
   const pcPending = punchCards.filter(t => !t.completed).length;
-  const pcText = punchCards.length === 0 ? "Punch Cards (No detectado)" : `Punch Cards (${punchCards.length - pcPending}/${punchCards.length})`;
+  const pcText = punchCards.length === 0 ? "Punch Cards (Sin tarjetas)" : `Punch Cards (${punchCards.length - pcPending}/${punchCards.length})`;
   const pcClass = punchCards.length === 0 ? "pending" : (pcPending === 0 ? "completed" : "pending");
-  const pcIcon = punchCards.length === 0 ? "⏳" : (pcPending === 0 ? "✅" : "⏳");
+  const pcIcon = (punchCards.length > 0 && pcPending === 0) ? checkIcon : clockIcon;
   
   list.innerHTML = `
     <div class="task-item ${dsClass}">
@@ -445,11 +447,10 @@ function updateDashboardState(session, stats) {
   const statusText = document.getElementById('status-text');
 
   if (!session || session.status === "idle" || session.status === "completed" || session.status === "stopped") {
-    // Idle state
     document.body.className = "mode-idle";
     lastDisplayedQuery = "";
     if (statusDot) {
-      statusDot.className = 'status-dot';
+      statusDot.className = 'status-dot green';
     }
     if (statusText) statusText.innerText = 'Listo';
     
@@ -458,7 +459,7 @@ function updateDashboardState(session, stats) {
     sessionProgressText.innerText = "Sin sesión activa";
     sessionPercentage.innerText = "0%";
     sessionProgressFill.style.width = "0%";
-    sessionCurrentQuery.innerText = "Esperando iniciar...";
+    sessionCurrentQuery.innerText = "Esperando inicio...";
     sessionCurrentQuery.className = "detail-val text-muted";
     sessionEstimatedPoints.innerText = "+0 pts";
     
@@ -466,20 +467,17 @@ function updateDashboardState(session, stats) {
     btnPauseText.innerText = "Pausar";
     btnStop.disabled = true;
     
-    // Hide speed graph and tabs row
     const speedRow = document.getElementById('session-speed-row');
     if (speedRow) speedRow.style.display = 'none';
     const tabsRow = document.getElementById('session-tabs-row');
     if (tabsRow) tabsRow.style.display = 'none';
 
-    // Enable launchers
     btnLaunchDesktop.disabled = false;
-    // Mobile launch button enablement removed
     btnLaunchAll.disabled = false;
     return;
   }
 
-  // Active running/paused state
+  // Active running or paused state
   document.body.className = session.mode === 'desktop' ? 'mode-desktop' : 'mode-edge';
   let translatedMode = session.mode === 'desktop' ? 'Escritorio' : 'Edge';
   sessionModeBadge.innerText = translatedMode;
@@ -494,7 +492,7 @@ function updateDashboardState(session, stats) {
   if (currentQuery !== lastDisplayedQuery) {
     lastDisplayedQuery = currentQuery;
     typeWriter(sessionCurrentQuery, currentQuery);
-  } else if (!sessionCurrentQuery.innerText || sessionCurrentQuery.innerText === "Esperando iniciar...") {
+  } else if (!sessionCurrentQuery.innerText || sessionCurrentQuery.innerText === "Esperando inicio...") {
     sessionCurrentQuery.innerText = currentQuery;
   }
   sessionCurrentQuery.className = "detail-val";
@@ -505,24 +503,21 @@ function updateDashboardState(session, stats) {
   
   if (session.status === "paused") {
     btnPauseText.innerText = "Reanudar";
-    btnPauseResume.querySelector('svg').innerHTML = `<polygon points="5 3 19 12 5 21 5 3"></polygon>`; // Play icon in new SVG format
-    if (statusDot) {
-      statusDot.className = 'status-dot orange';
-    }
+    const playSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3" /></svg>`;
+    const curSvg = btnPauseResume.querySelector('svg');
+    if (curSvg) curSvg.outerHTML = playSvg;
+    if (statusDot) statusDot.className = 'status-dot orange';
     if (statusText) statusText.innerText = 'Pausado';
   } else {
     btnPauseText.innerText = "Pausar";
-    btnPauseResume.querySelector('svg').innerHTML = `<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>`; // Pause icon in new SVG format
-    if (statusDot) {
-      statusDot.className = 'status-dot green';
-    }
-    if (statusText) statusText.innerText = `Corriendo (${translatedMode})`;
+    const pauseSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="4" height="16" rx="1" /><rect x="15" y="4" width="4" height="16" rx="1" /></svg>`;
+    const curSvg = btnPauseResume.querySelector('svg');
+    if (curSvg) curSvg.outerHTML = pauseSvg;
+    if (statusDot) statusDot.className = 'status-dot green';
+    if (statusText) statusText.innerText = `Buscando (${translatedMode})`;
   }
 
-  // Disable launchers
   btnLaunchDesktop.disabled = true;
-  // Mobile launcher disabled status removed
-
   btnLaunchAll.disabled = true;
 
   // Speed and Sparkline updates
@@ -563,7 +558,6 @@ function updateDashboardState(session, stats) {
 function setupActionListeners() {
   // Launchers
   btnLaunchDesktop.addEventListener('click', () => triggerLaunch('desktop'));
-  // Mobile launcher listener removed
   
   btnLaunchAll.addEventListener('click', async () => {
     const data = await chrome.storage.local.get("settings");
@@ -571,14 +565,13 @@ function setupActionListeners() {
     
     const queue = [];
     const desktopSearches = settings.desktopSearches ?? 30;
-    // Mobile search count queueing removed
     
     if (desktopSearches > 0) {
       triggerLaunch('desktop', queue);
     } else if (queue.length > 0) {
       triggerLaunch(queue[0], queue.slice(1));
     } else {
-      showToast("¡Habilite las cantidades de búsqueda primero!", true);
+      showToast("¡Configura cantidad de búsquedas primero!", true);
     }
   });
 
@@ -590,14 +583,20 @@ function setupActionListeners() {
           showToast("Abriendo Rewards para reclamar tareas...");
           btnLaunchDailyTasks.disabled = true;
           btnLaunchDailyTasks.innerHTML = `
-            <div class="spinner-mini"></div>
+            <div class="launcher-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spinning"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+            </div>
             <span class="launcher-label">Procesando...</span>
             <span class="launcher-sub">Reclamando set</span>
           `;
           setTimeout(() => {
             btnLaunchDailyTasks.disabled = false;
             btnLaunchDailyTasks.innerHTML = `
-              <div class="launcher-icon">🎁</div>
+              <div class="launcher-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" rx="1" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+                </svg>
+              </div>
               <span class="launcher-label">Reclamar Tareas</span>
               <span class="launcher-sub">Daily Set + Más</span>
             `;
@@ -613,44 +612,54 @@ function setupActionListeners() {
   if (btnRefreshPoints) {
     btnRefreshPoints.addEventListener('click', () => {
       btnRefreshPoints.classList.add('spinning');
-      showToast("Sincronizando puntos con Microsoft...");
+      showToast("Sincronizando con Microsoft Rewards...");
       chrome.runtime.sendMessage({ action: "syncPoints" }, (response) => {
         btnRefreshPoints.classList.remove('spinning');
         if (response && response.success) {
           loadAllData();
-          showToast("✅ Puntos actualizados");
+          showToast("Puntos actualizados correctamente");
         } else {
-          showToast("⚠️ No se pudieron actualizar los puntos", true);
+          showToast("No se pudo conectar a la API", true);
         }
       });
     });
   }
-
-
 
   // Session Controls
   btnPauseResume.addEventListener('click', async () => {
     const data = await chrome.storage.local.get("session");
     const session = data.session;
     if (session) {
-      const action = session.status === "paused" ? "resumeSession" : "pauseSession";
-      chrome.runtime.sendMessage({ action });
+      const isPaused = session.status === "paused";
+      const action = isPaused ? "resumeSession" : "pauseSession";
+      btnPauseResume.disabled = true;
+      chrome.runtime.sendMessage({ action }, (res) => {
+        btnPauseResume.disabled = false;
+        if (res && res.error) {
+          showToast(res.error, true);
+        }
+        updateDashboard();
+      });
     }
   });
 
   btnStop.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: "stopSession" });
+    btnStop.disabled = true;
+    chrome.runtime.sendMessage({ action: "stopSession" }, () => {
+      btnStop.disabled = false;
+      updateDashboard();
+    });
   });
 
   // Settings Save
   settingsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const querySource = document.querySelector('input[name="querySource"]:checked').value;
+    const selectedRadio = document.querySelector('input[name="querySource"]:checked');
+    const querySource = selectedRadio ? selectedRadio.value : "random";
     
     const updatedSettings = {
-      desktopSearches: parseInt(setDesktopSearches.value) || 0,
-      // Mobile searches save removed
+      desktopSearches: parseInt(setDesktopSearches.value) || 30,
       minDelay: parseInt(setMinDelay.value) || 6,
       maxDelay: parseInt(setMaxDelay.value) || 15,
       enableRandomDelay: setEnableRandomDelay.checked,
@@ -661,20 +670,15 @@ function setupActionListeners() {
       customQueries: setCustomQueries.value
     };
 
-    // Save to storage
     const storage = await chrome.storage.local.get("settings");
     const oldSettings = storage.settings || {};
     
-    // Preserve scheduling variables
     updatedSettings.scheduleEnabled = oldSettings.scheduleEnabled ?? false;
     updatedSettings.scheduleTime = oldSettings.scheduleTime || "09:00";
     updatedSettings.activeDays = oldSettings.activeDays || ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
     await chrome.storage.local.set({ settings: updatedSettings });
-    
-    // Update labels on launchers
     loadAllData();
-    
     showToast("¡Ajustes guardados exitosamente!");
   });
 
@@ -696,18 +700,17 @@ function setupActionListeners() {
 
     await chrome.storage.local.set({ settings });
     
-    // Tell background worker to reschedule daily run
     chrome.runtime.sendMessage({ action: "updateSchedule" }, () => {
-      showToast("¡Horario actualizado!");
+      showToast("¡Horario programado actualizado!");
     });
   });
 
   // Clear History
   btnClearHistory.addEventListener('click', async () => {
-    if (confirm("¿Estás seguro de que quieres borrar el historial de búsquedas?")) {
+    if (confirm("¿Deseas vaciar el registro histórico de sesiones?")) {
       await chrome.storage.local.set({ history: [] });
       renderHistory([]);
-      showToast("Historial borrado.");
+      showToast("Historial vaciado.");
     }
   });
 }
@@ -725,56 +728,56 @@ function triggerLaunch(mode, queue = []) {
 
 // Mini Toast feedback
 function showToast(message, isError = false) {
+  const existing = document.querySelector('.toast-popup');
+  if (existing) existing.remove();
+
   const toast = document.createElement('div');
   toast.className = `toast-popup ${isError ? 'error' : ''}`;
   toast.innerText = message;
   
-  // Custom styles for toast
   Object.assign(toast.style, {
     position: 'absolute',
-    bottom: '50px',
+    bottom: '48px',
     left: '50%',
     transform: 'translateX(-50%)',
-    backgroundColor: isError ? '#ef4444' : '#10b981',
+    backgroundColor: isError ? 'rgba(239, 68, 68, 0.95)' : 'rgba(16, 185, 129, 0.95)',
     color: '#fff',
     padding: '8px 16px',
     borderRadius: '20px',
-    fontSize: '12px',
-    fontWeight: '600',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+    fontSize: '11.5px',
+    fontWeight: '700',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    backdropFilter: 'blur(8px)',
     zIndex: '9999',
     opacity: '0',
-    transition: 'opacity 0.3s ease, transform 0.3s ease',
-    pointerEvents: 'none'
+    transition: 'opacity 0.25s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap'
   });
   
   document.body.appendChild(toast);
   
-  // Trigger animations
   setTimeout(() => {
     toast.style.opacity = '1';
-    toast.style.transform = 'translate(-50%, -4px)';
-  }, 50);
+    toast.style.transform = 'translate(-50%, -6px)';
+  }, 30);
 
-  // Fade out
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.style.transform = 'translate(-50%, 0px)';
     setTimeout(() => {
       toast.remove();
-    }, 300);
-  }, 2500);
+    }, 250);
+  }, 2400);
 }
 
-// ═══════════════════════════════════════════════════════════════
-// VISUAL ENHANCEMENTS & HELPERS
-// ═══════════════════════════════════════════════════════════════
-
+// Typewriter effect for query display
 let currentTypewriterInterval = null;
 let lastDisplayedQuery = "";
 
-// Typewriter effect for query display
-function typeWriter(element, text, speed = 40) {
+function typeWriter(element, text, speed = 30) {
+  if (!element) return;
   if (currentTypewriterInterval) clearInterval(currentTypewriterInterval);
   element.innerText = "";
   element.classList.add("typing");
@@ -798,8 +801,8 @@ function renderSpeedSparkline(history) {
   
   if (!history || history.length < 2) return;
   
-  const width = 60;
-  const height = 16;
+  const width = 50;
+  const height = 14;
   const maxVal = Math.max(...history, 10);
   const minVal = Math.min(...history, 0);
   const range = maxVal - minVal || 1;
@@ -807,14 +810,14 @@ function renderSpeedSparkline(history) {
   const points = history.map((val, index) => {
     const x = (index / (history.length - 1)) * width;
     const y = height - ((val - minVal) / range) * height;
-    return `${x},${y}`;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   
   const pathData = `M ${points.join(' L ')}`;
   
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('d', pathData);
-  path.setAttribute('stroke', 'var(--primary)');
+  path.setAttribute('stroke', '#10b981');
   path.setAttribute('stroke-width', '1.5');
   path.setAttribute('fill', 'none');
   path.setAttribute('stroke-linecap', 'round');
@@ -835,16 +838,16 @@ function updateLauncherCompletion(mode, current, max) {
   }
   if (max > 0 && current >= max) {
     indicator.className = 'completion-indicator completed';
-    indicator.innerText = '✓';
+    indicator.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>`;
     btn.classList.add('completed');
   } else {
     indicator.className = 'completion-indicator pending';
-    indicator.innerText = '○';
+    indicator.innerHTML = '';
     btn.classList.remove('completed');
   }
 }
 
-// Render all activity logs in the UI (Mejora 4D)
+// Render all activity logs in the UI
 function renderActivityLogs(logs) {
   if (!activityLogContent) return;
   
@@ -857,30 +860,28 @@ function renderActivityLogs(logs) {
   activityLogContent.scrollTop = activityLogContent.scrollHeight;
 }
 
-// Appends a single log entry to the UI in real-time (Mejora 4D)
+// Appends a single log entry to the UI in real-time
 function appendLogEntryToUI(logEntry) {
   if (!activityLogContent) return;
   
-  // Remove empty message if it exists
   const emptyMsg = activityLogContent.querySelector('.log-empty-msg');
   if (emptyMsg) {
     emptyMsg.remove();
   }
   
-  // Create element and append
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = formatLogEntry(logEntry);
-  activityLogContent.appendChild(tempDiv.firstElementChild);
-  
-  // Scroll to bottom
-  activityLogContent.scrollTop = activityLogContent.scrollHeight;
+  if (tempDiv.firstElementChild) {
+    activityLogContent.appendChild(tempDiv.firstElementChild);
+    activityLogContent.scrollTop = activityLogContent.scrollHeight;
+  }
 }
 
-// Formats a log string into CSS-styled HTML (Mejora 4D)
+// Formats a log string into CSS-styled HTML
 function formatLogEntry(logStr) {
   const match = logStr.match(/^\[(.*?)\] (.*)$/);
   if (match) {
-    return `<div class="log-entry"><span class="log-time">[${match[1]}]</span>${match[2]}</div>`;
+    return `<div class="log-entry"><span class="log-time">[${match[1]}]</span><span class="log-msg">${match[2]}</span></div>`;
   }
   return `<div class="log-entry">${logStr}</div>`;
 }

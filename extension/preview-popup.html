@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rewards Auto — Popup UI Preview & Functional Test</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: radial-gradient(circle at 50% 0%, #172554 0%, #030712 70%);
+      padding: 40px 20px;
+    }
+    .preview-frame {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 18px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 40px rgba(59, 130, 246, 0.2);
+      overflow: hidden;
+      background: #080c14;
+    }
+  </style>
+  <script>
+    // Mock Chrome Extension API for Preview Testing
+    const mockStorage = {
+      stats: {
+        todayPoints: 165,
+        totalPoints: 14850,
+        streak: 14,
+        level: "Level 2 (Gold)",
+        lastUpdatedDate: new Date().toISOString().split('T')[0],
+        pcSearch: { current: 90, max: 90 }
+      },
+      settings: {
+        desktopSearches: 30,
+        minDelay: 6,
+        maxDelay: 15,
+        cooldownBetweenSearches: 2,
+        enableRandomDelay: true,
+        autoCloseTabs: true,
+        querySource: "random",
+        customQueries: "",
+        scheduleTime: "09:00",
+        scheduleEnabled: true,
+        activeDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        autoStartNextMode: true,
+        webhookUrl: ""
+      },
+      session: {
+        status: "running",
+        mode: "desktop",
+        totalSearches: 30,
+        completedSearches: 18,
+        pointsEarned: 90,
+        currentIndex: 18,
+        queries: ["James Webb Space Telescope latest findings", "sourdough bread hydration ratio 75%", "quantum computing algorithms 2026"],
+        tabId: 101,
+        openedTabIds: [101]
+      },
+      scannedTasks: {
+        dailySet: [
+          { title: "Quiz de Noticias Diarias", points: "+30", completed: true, type: "quiz" },
+          { title: "Sondeo de Opinión Rápido", points: "+10", completed: true, type: "poll" },
+          { title: "Descubre Curiosidades de la Ciencia", points: "+10", completed: false, type: "click" }
+        ],
+        moreActivities: [
+          { title: "Bono Especial Xbox Game Pass", points: "+50", completed: false, type: "url" },
+          { title: "Explora Destinos de Viaje 2026", points: "+15", completed: true, type: "url" },
+          { title: "Trivia de Películas Clásicas", points: "+30", completed: false, type: "quiz" }
+        ],
+        streakBonus: {
+          streakDays: 14,
+          bonusAvailable: true,
+          bonusAmount: 150
+        }
+      },
+      history: [
+        { date: new Date(Date.now() - 3600000).toISOString(), mode: "desktop", searches: "30/30", points: 90, status: "completed" },
+        { date: new Date(Date.now() - 86400000).toISOString(), mode: "desktop", searches: "30/30", points: 90, status: "completed" },
+        { date: new Date(Date.now() - 172800000).toISOString(), mode: "desktop", searches: "30/30", points: 90, status: "completed" }
+      ],
+      activityLog: [
+        { text: "Sesión automática iniciada en modo DESKTOP", time: "10:45 AM" },
+        { text: "Búsqueda 18/30 completada: 'sourdough bread hydration ratio 75%'", time: "10:48 AM" },
+        { text: "Puntos acreditados (+5 pts). Próxima búsqueda en 7.2s", time: "10:48 AM" }
+      ]
+    };
+
+    window.chrome = {
+      storage: {
+        local: {
+          get: (keys, callback) => {
+            if (typeof keys === 'string') {
+              callback({ [keys]: mockStorage[keys] });
+            } else if (Array.isArray(keys)) {
+              const res = {};
+              keys.forEach(k => res[k] = mockStorage[k]);
+              callback(res);
+            } else if (typeof keys === 'object' && keys !== null) {
+              const res = {};
+              Object.keys(keys).forEach(k => res[k] = mockStorage[k] !== undefined ? mockStorage[k] : keys[k]);
+              callback(res);
+            } else {
+              callback(mockStorage);
+            }
+          },
+          set: (items, callback) => {
+            Object.assign(mockStorage, items);
+            if (callback) callback();
+          },
+          remove: (keys, callback) => {
+            if (Array.isArray(keys)) keys.forEach(k => delete mockStorage[k]);
+            else delete mockStorage[keys];
+            if (callback) callback();
+          }
+        }
+      },
+      runtime: {
+        sendMessage: (message, callback) => {
+          console.log("[Mock Chrome Runtime] Message sent:", message);
+          if (message.action === "refreshPoints") {
+            if (callback) callback({ success: true, stats: mockStorage.stats });
+          } else if (callback) {
+            callback({ success: true });
+          }
+        },
+        onMessage: {
+          addListener: (fn) => {
+            window.__mockMessageListener = fn;
+          }
+        }
+      },
+      tabs: {
+        create: (opts) => {
+          window.open(opts.url, '_blank');
+        }
+      }
+    };
+  </script>
+</head>
+<body>
+  <div class="preview-frame">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-wrapper">
+          <img src="icons/icon-32.png" alt="Logo" class="logo-img">
+          <span class="status-indicator-dot online" id="status-indicator-dot" title="Servicio activo"></span>
+        </div>
+        <div class="brand-text">
+          <h1 class="app-title">Rewards <span class="brand-accent">Auto</span></h1>
+          <span class="app-version">v4.2.0</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-refresh-points" class="icon-action-btn" title="Sincronizar puntos en vivo">
+          <img src="icons/refresh.svg" alt="Refresh" class="svg-icon">
+        </button>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="dashboard">
+        <img src="icons/dashboard.svg" alt="" class="tab-icon">
+        <span>Panel</span>
+      </button>
+      <button class="tab-btn" data-tab="settings">
+        <img src="icons/settings.svg" alt="" class="tab-icon">
+        <span>Ajustes</span>
+      </button>
+      <button class="tab-btn" data-tab="schedule">
+        <img src="icons/schedule.svg" alt="" class="tab-icon">
+        <span>Horario</span>
+        <span class="tab-badge-dot" id="schedule-active-dot"></span>
+      </button>
+      <button class="tab-btn" data-tab="history">
+        <img src="icons/history.svg" alt="" class="tab-icon">
+        <span>Historial</span>
+      </button>
+    </nav>
+
+    <!-- Content Sections -->
+    <main class="content-body">
+      <!-- ════════ TAB: DASHBOARD ════════ -->
+      <section id="tab-dashboard" class="tab-content active">
+        <!-- Main Stats Overview -->
+        <div class="stats-grid">
+          <div class="stat-card primary-stat">
+            <div class="stat-icon-wrap points-glow">
+              <img src="icons/star.svg" alt="Puntos" class="svg-stat-icon">
+            </div>
+            <div class="stat-details">
+              <span class="stat-label">Puntos Hoy</span>
+              <span class="stat-number stat-highlight" id="stat-today-points">0</span>
+            </div>
+            <div class="circular-progress-mini">
+              <svg viewBox="0 0 36 36" class="circular-chart">
+                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path class="circle" id="today-points-circle" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon-wrap streak-glow">
+              <img src="icons/flame.svg" alt="Racha" class="svg-stat-icon">
+            </div>
+            <div class="stat-details">
+              <span class="stat-label">Racha Activa</span>
+              <span class="stat-number" id="stat-streak">0 <small>días</small></span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon-wrap trophy-glow">
+              <img src="icons/trophy.svg" alt="Total" class="svg-stat-icon">
+            </div>
+            <div class="stat-details">
+              <span class="stat-label">Total Acumulado</span>
+              <span class="stat-number" id="stat-total-points">0</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon-wrap level-glow">
+              <img src="icons/zap.svg" alt="Nivel" class="svg-stat-icon">
+            </div>
+            <div class="stat-details">
+              <span class="stat-label">Nivel de Cuenta</span>
+              <span class="stat-number stat-badge" id="stat-level">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Automation Banner -->
+        <div id="active-session-container" class="active-session-card hidden">
+          <div class="session-header">
+            <div class="session-status-badge">
+              <span class="pulse-ring"></span>
+              <span class="badge-text" id="session-mode-badge">Búsquedas PC</span>
+            </div>
+            <div class="session-progress-counts">
+              <span id="session-progress-text" class="progress-count">0 / 0</span>
+              <span id="session-percentage" class="progress-pct">0%</span>
+            </div>
+          </div>
+
+          <div class="progress-bar-container">
+            <div class="progress-bar-track">
+              <div id="session-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div class="session-query-preview">
+            <span class="query-icon"><img src="icons/search.svg" alt="" width="12" height="12"></span>
+            <span id="session-current-query" class="query-text">Esperando consulta...</span>
+          </div>
+
+          <div class="session-footer">
+            <div class="session-metrics">
+              <span class="metric-label">Puntos estimados:</span>
+              <span id="session-estimated-points" class="metric-val">+0 pts</span>
+            </div>
+            <div class="session-controls">
+              <button id="btn-pause-resume" class="btn-ctrl btn-pause" title="Pausar o Reanudar">
+                <img src="icons/pause.svg" alt="Pausar" class="ctrl-icon" id="icon-pause-resume">
+                <span id="btn-pause-text">Pausar</span>
+              </button>
+              <button id="btn-stop" class="btn-ctrl btn-stop" title="Detener sesión">
+                <img src="icons/stop.svg" alt="Detener" class="ctrl-icon">
+                <span>Detener</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Launch Automation Center -->
+        <div class="section-card launcher-card">
+          <div class="section-card-header">
+            <h2 class="section-heading">Lanzador Rápido</h2>
+            <span class="section-subtext">Selecciona una acción</span>
+          </div>
+
+          <div class="launcher-actions-grid">
+            <button id="launch-desktop" class="launch-btn btn-primary">
+              <div class="btn-content">
+                <div class="btn-icon-box">
+                  <img src="icons/monitor.svg" alt="" class="btn-svg">
+                </div>
+                <div class="btn-text-group">
+                  <span class="btn-main-title">Búsquedas PC</span>
+                  <span class="btn-subtitle" id="lbl-desktop-count">30 búsquedas (90 pts)</span>
+                </div>
+              </div>
+              <img src="icons/play.svg" alt="" class="action-arrow">
+            </button>
+
+            <button id="launch-daily-tasks" class="launch-btn btn-secondary">
+              <div class="btn-content">
+                <div class="btn-icon-box tasks-box">
+                  <img src="icons/gift.svg" alt="" class="btn-svg">
+                </div>
+                <div class="btn-text-group">
+                  <span class="btn-main-title">Reclamar Tareas Bing</span>
+                  <span class="btn-subtitle">Daily Set + Actividades + Racha</span>
+                </div>
+              </div>
+              <img src="icons/play.svg" alt="" class="action-arrow">
+            </button>
+
+            <button id="launch-all" class="launch-btn btn-combo">
+              <div class="btn-content">
+                <div class="btn-icon-box combo-box">
+                  <img src="icons/sparkles.svg" alt="" class="btn-svg">
+                </div>
+                <div class="btn-text-group">
+                  <span class="btn-main-title">Combo Completo (Todo en 1)</span>
+                  <span class="btn-subtitle">Búsquedas + Tareas + Bono Diario</span>
+                </div>
+              </div>
+              <img src="icons/play.svg" alt="" class="action-arrow">
+            </button>
+          </div>
+        </div>
+
+        <!-- Daily Tasks Scanned Preview Card -->
+        <div class="section-card" id="scanned-tasks-card">
+          <div class="section-card-header">
+            <div class="header-with-badge">
+              <h2 class="section-heading">Tareas del Dashboard</h2>
+              <span class="counter-badge" id="tasks-summary-badge">0 / 0</span>
+            </div>
+            <button id="btn-quick-sync-tasks" class="btn-text-action">
+              <img src="icons/refresh.svg" alt="" width="11" height="11"> Escanear
+            </button>
+          </div>
+
+          <div class="tasks-checklist" id="scanned-tasks-list">
+            <div class="empty-state">
+              <img src="icons/gift.svg" alt="" class="empty-state-icon">
+              <span>Abre el dashboard de Bing Rewards para detectar tus actividades diarias.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity Feed Accordion -->
+        <div class="section-card activity-accordion">
+          <div class="activity-header" id="activity-header-toggle">
+            <div class="activity-title">
+              <img src="icons/activity.svg" alt="" class="svg-icon-sm">
+              <span>Registro de Actividad en Vivo</span>
+            </div>
+            <img src="icons/chevron-down.svg" alt="" class="chevron-icon" id="activity-chevron">
+          </div>
+          <div class="activity-body hidden" id="activity-log-body">
+            <ul class="activity-list" id="activity-log-list">
+              <li class="log-item">Extension iniciada y lista para automatizar.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════ TAB: SETTINGS ════════ -->
+      <section id="tab-settings" class="tab-content">
+        <form id="settings-form" class="settings-form">
+          <div class="section-card">
+            <div class="section-card-header">
+              <h2 class="section-heading">Búsquedas y Límites</h2>
+            </div>
+            <div class="form-group">
+              <div class="form-label-row">
+                <label for="set-desktop-searches">Búsquedas PC:</label>
+                <span class="form-value-display" id="val-desktop-searches">30</span>
+              </div>
+              <input type="range" id="set-desktop-searches" min="5" max="60" step="5" value="30">
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-card-header">
+              <h2 class="section-heading">Tiempos y Simulación Humana</h2>
+            </div>
+            <div class="form-row">
+              <div class="form-group half">
+                <label for="set-min-delay">Demora Mín (seg):</label>
+                <input type="number" id="set-min-delay" min="3" max="60" value="6">
+              </div>
+              <div class="form-group half">
+                <label for="set-max-delay">Demora Máx (seg):</label>
+                <input type="number" id="set-max-delay" min="5" max="120" value="15">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="set-cooldown">Cooldown post-búsqueda (seg):</label>
+              <input type="number" id="set-cooldown" min="0" max="10" value="2">
+            </div>
+            <div class="toggle-group">
+              <label class="switch">
+                <input type="checkbox" id="set-enable-random-delay" checked>
+                <span class="slider"></span>
+              </label>
+              <div class="toggle-text">
+                <span class="toggle-title">Intervalos Gaussianos Aleatorios</span>
+                <span class="toggle-desc">Emula pausas humanas para proteger tu cuenta</span>
+              </div>
+            </div>
+            <div class="toggle-group">
+              <label class="switch">
+                <input type="checkbox" id="set-auto-close" checked>
+                <span class="slider"></span>
+              </label>
+              <div class="toggle-text">
+                <span class="toggle-title">Cerrar Pestañas Automáticamente</span>
+                <span class="toggle-desc">Mantiene tu navegador limpio y rápido</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-card-header">
+              <h2 class="section-heading">Fuente de Búsquedas</h2>
+            </div>
+            <div class="radio-options">
+              <label class="radio-option">
+                <input type="radio" name="querySource" value="random" checked>
+                <span class="radio-custom"></span>
+                <div class="radio-label-group">
+                  <span class="radio-title">Google Trends + Catálogo Orgánico</span>
+                  <span class="radio-desc">Tendencias reales actualizadas para evitar detección</span>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="querySource" value="custom">
+                <span class="radio-custom"></span>
+                <div class="radio-label-group">
+                  <span class="radio-title">Palabras Clave Personalizadas</span>
+                  <span class="radio-desc">Lista separada por comas de tus propias búsquedas</span>
+                </div>
+              </label>
+            </div>
+            <div id="custom-queries-area" class="form-group hidden">
+              <textarea id="set-custom-queries" rows="3" placeholder="tecnologia, salud, recetas, viajes, deportes..."></textarea>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-card-header">
+              <h2 class="section-heading">Integraciones y Webhooks</h2>
+            </div>
+            <div class="form-group">
+              <label for="set-webhook-url">Discord / Telegram Webhook URL:</label>
+              <input type="url" id="set-webhook-url" placeholder="https://discord.com/api/webhooks/...">
+            </div>
+          </div>
+
+          <div class="form-actions-sticky">
+            <button type="submit" class="btn-submit">
+              <img src="icons/save.svg" alt="" class="btn-svg-sm">
+              <span>Guardar Configuración</span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ════════ TAB: SCHEDULE ════════ -->
+      <section id="tab-schedule" class="tab-content">
+        <form id="schedule-form" class="schedule-form">
+          <div class="section-card">
+            <div class="section-card-header">
+              <h2 class="section-heading">Programación Diaria</h2>
+              <span class="section-subtext">Ejecución automática sin intervención</span>
+            </div>
+            <div class="toggle-group highlight-toggle">
+              <label class="switch">
+                <input type="checkbox" id="set-schedule-enabled">
+                <span class="slider"></span>
+              </label>
+              <div class="toggle-text">
+                <span class="toggle-title">Activar Auto-Ejecución</span>
+                <span class="toggle-desc">Inicia las búsquedas automáticamente a la hora fijada</span>
+              </div>
+            </div>
+            <div id="schedule-config-area" class="schedule-inner-config hidden">
+              <div class="form-group">
+                <label for="set-schedule-time">Hora de inicio diario:</label>
+                <input type="time" id="set-schedule-time" value="09:00" class="time-input">
+              </div>
+              <div class="form-group">
+                <label>Días activos:</label>
+                <div class="days-selector">
+                  <label class="day-chip"><input type="checkbox" value="Mon" checked><span>L</span></label>
+                  <label class="day-chip"><input type="checkbox" value="Tue" checked><span>M</span></label>
+                  <label class="day-chip"><input type="checkbox" value="Wed" checked><span>X</span></label>
+                  <label class="day-chip"><input type="checkbox" value="Thu" checked><span>J</span></label>
+                  <label class="day-chip"><input type="checkbox" value="Fri" checked><span>V</span></label>
+                  <label class="day-chip"><input type="checkbox" value="Sat" checked><span>S</span></label>
+                  <label class="day-chip"><input type="checkbox" value="Sun" checked><span>D</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions-sticky">
+            <button type="submit" class="btn-submit">
+              <img src="icons/save.svg" alt="" class="btn-svg-sm">
+              <span>Guardar Horario</span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ════════ TAB: HISTORY ════════ -->
+      <section id="tab-history" class="tab-content">
+        <div class="section-card">
+          <div class="section-card-header">
+            <h2 class="section-heading">Historial de Sesiones</h2>
+            <button id="btn-clear-history" class="btn-text-danger">
+              <img src="icons/trash.svg" alt="" width="11" height="11"> Limpiar
+            </button>
+          </div>
+          <div class="history-table-wrapper">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Modo</th>
+                  <th>Búsquedas</th>
+                  <th>Pts</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="history-rows">
+                <tr class="empty-row"><td colspan="5">No hay historial registrado</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer Meta -->
+    <footer class="app-footer">
+      <div class="footer-status">
+        <span class="pulse-dot"></span>
+        <span id="footer-status-text">Listo para automatizar</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://rewards.bing.com" target="_blank" class="footer-link">
+          <span>Bing Rewards</span>
+          <img src="icons/external-link.svg" alt="" width="10" height="10">
+        </a>
+      </div>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

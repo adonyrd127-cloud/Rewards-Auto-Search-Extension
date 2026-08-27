@@ -4,22 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rewards Auto Search & Claimer</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 </head>
-<body>
+<body class="mode-idle">
   <div class="app-container">
-    <!-- Header -->
+    
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- App Header                                      -->
+    <!-- ═══════════════════════════════════════════════ -->
     <header class="app-header">
       <div class="logo-area">
-        <div class="logo-icon-wrapper">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        <div class="logo-icon-wrapper" title="Rewards Auto Search & Claimer">
+          <svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
           </svg>
         </div>
         <div class="logo-text">
           <h1>Rewards <span class="text-glow">Auto</span></h1>
-          <span class="version">v4.2.0</span>
+          <span class="version">v4.3.0</span>
         </div>
       </div>
       <div class="status-badge" id="global-status">
@@ -28,34 +31,48 @@
       </div>
     </header>
 
-    <!-- Navigation -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Navigation Tabs                                 -->
+    <!-- ═══════════════════════════════════════════════ -->
     <nav class="nav-tabs">
-      <button class="tab-btn active" data-tab="dashboard">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      <button class="tab-btn active" data-tab="dashboard" id="tab-btn-dashboard" aria-label="Dashboard">
+        <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" />
+        </svg>
         <span>Dashboard</span>
       </button>
-      <button class="tab-btn" data-tab="settings">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      <button class="tab-btn" data-tab="settings" id="tab-btn-settings" aria-label="Ajustes">
+        <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
         <span>Ajustes</span>
       </button>
-      <button class="tab-btn" data-tab="schedule">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+      <button class="tab-btn" data-tab="schedule" id="tab-btn-schedule" aria-label="Horario">
+        <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
+        </svg>
         <span>Horario</span>
       </button>
-      <button class="tab-btn" data-tab="history">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>
+      <button class="tab-btn" data-tab="history" id="tab-btn-history" aria-label="Historial">
+        <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+        </svg>
         <span>Historial</span>
       </button>
     </nav>
 
-    <!-- Content -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Content Area                                    -->
+    <!-- ═══════════════════════════════════════════════ -->
     <main class="app-content">
       
       <!-- ============ TAB: DASHBOARD ============ -->
       <div class="tab-content active" id="tab-dashboard">
         
-        <!-- Stats Grid with Circular Progress -->
+        <!-- Stats Grid -->
         <div class="stats-grid">
+          
+          <!-- Card 1: Puntos Hoy -->
           <div class="stat-card">
             <div class="stat-header">
               <span class="stat-title">Puntos Hoy</span>
@@ -64,8 +81,8 @@
             <div class="stat-body">
               <div class="circular-progress" data-value="0" id="circle-today">
                 <svg class="progress-ring" viewBox="0 0 100 100">
-                  <circle class="progress-ring-bg" cx="50" cy="50" r="42"></circle>
-                  <circle class="progress-ring-fill" cx="50" cy="50" r="42" id="ring-today"></circle>
+                  <circle class="progress-ring-bg" cx="50" cy="50" r="40"></circle>
+                  <circle class="progress-ring-fill" cx="50" cy="50" r="40" id="ring-today"></circle>
                 </svg>
                 <div class="progress-value">
                   <span class="stat-value text-green skeleton-text" id="stat-today-points">0</span>
@@ -74,10 +91,16 @@
             </div>
           </div>
 
+          <!-- Card 2: Racha Diaria -->
           <div class="stat-card">
             <div class="stat-header">
               <span class="stat-title">Racha Diaria</span>
-              <span class="streak-icon">🔥</span>
+              <div class="streak-icon-wrap" title="Días consecutivos activos">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8.5 14.5A3.5 3.5 0 0 0 12 18a3.5 3.5 0 0 0 3.5-3.5c0-2-1.5-3.5-2.5-5-.5 1-1 1.5-1.5 1.5s-.8-.5-.8-1.2c0-2.3 2-4.8 2.8-6.8-3 1.2-5.5 4.5-5.5 8 0 .5.1 1 .2 1.5z" />
+                  <path d="M12 22a8 8 0 0 0 8-8c0-4-2.5-7.5-5.5-10.5-1 1.8-2 3.5-2 5.5 0 1.5.8 2.8 1.5 4-1.5 0-3-1-3.5-2.5-1 1.5-1.5 3-1.5 4.5 0 1.2.4 2.3 1 3.2A5.8 5.8 0 0 1 6 14c0-3.2 2-6 4.5-8.2C7 8 4 11.5 4 15.5A8 8 0 0 0 12 22z" />
+                </svg>
+              </div>
             </div>
             <div class="stat-body center">
               <span class="stat-value text-yellow skeleton-text" id="stat-streak">0</span>
@@ -90,21 +113,27 @@
             </div>
           </div>
 
-          <div class="stat-card full-width flex-row justify-between items-center" style="position: relative;">
-            <div style="display: flex; flex: 1; align-items: center; justify-content: space-between;">
+          <!-- Card 3: Puntos Totales & Nivel -->
+          <div class="stat-card full-width flex-row justify-between items-center">
+            <div class="stat-info-group">
               <div class="stat-info">
                 <span class="stat-title">Puntos Totales</span>
                 <span class="stat-value skeleton-text" id="stat-total-points">0</span>
               </div>
               <div class="stat-divider"></div>
               <div class="stat-info">
-                <span class="stat-title">Nivel</span>
-                <span class="stat-value text-purple skeleton-text" id="stat-level">Nivel 1</span>
+                <span class="stat-title">Nivel Actual</span>
+                <div class="level-badge-wrap">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2" /><path d="M18 9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2" /><path d="M4 3h16v6a7 7 0 0 1-14 0V3z" /><path d="M12 16v5" /><path d="M8 21h8" />
+                  </svg>
+                  <span class="stat-value text-purple skeleton-text" id="stat-level">Nivel 1</span>
+                </div>
               </div>
             </div>
-            <button class="btn-refresh" id="btn-refresh-points" title="Actualizar puntos" style="margin-left: 12px;">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1 2.12-9.36L23 10"/>
+            <button class="btn-refresh" id="btn-refresh-points" title="Sincronizar puntos con Microsoft Rewards">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
               </svg>
             </button>
           </div>
@@ -114,8 +143,12 @@
         <div class="active-session-panel idle" id="active-session-container">
           <div class="panel-header">
             <div class="panel-title-area">
-              <span class="panel-icon" id="session-icon">🤖</span>
-              <span class="panel-title" id="session-title">Automatización Activa</span>
+              <div class="session-status-icon" id="session-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+              </div>
+              <span class="panel-title" id="session-title">Automatización de Búsqueda</span>
             </div>
             <span class="badge" id="session-mode-badge">-</span>
           </div>
@@ -134,7 +167,7 @@
           <div class="session-details">
             <div class="detail-item">
               <span class="detail-label">Búsqueda Actual:</span>
-              <span class="detail-val text-muted" id="session-current-query">Esperando iniciar...</span>
+              <span class="detail-val text-muted" id="session-current-query">Esperando inicio...</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Puntos Estimados:</span>
@@ -142,8 +175,8 @@
             </div>
             <div class="detail-item" id="session-speed-row" style="display: none;">
               <span class="detail-label">Velocidad:</span>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <svg id="speed-sparkline" width="60" height="16" style="overflow: visible; stroke: var(--primary); stroke-width: 1.5; fill: none;"></svg>
+              <div class="speed-val-wrap">
+                <svg id="speed-sparkline" width="50" height="14" style="overflow: visible; stroke: var(--primary); stroke-width: 1.5; fill: none;"></svg>
                 <span class="detail-val" id="session-speed">- búsquedas/min</span>
               </div>
             </div>
@@ -155,49 +188,56 @@
 
           <div class="session-controls">
             <button class="control-btn play-btn" id="btn-pause-resume" disabled>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="4" width="4" height="16" rx="1" /><rect x="15" y="4" width="4" height="16" rx="1" />
+              </svg>
               <span id="btn-pause-text">Pausar</span>
             </button>
             <button class="control-btn stop-btn" id="btn-stop" disabled>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+              </svg>
               <span>Detener</span>
             </button>
           </div>
         </div>
 
-        <!-- Activity Log Panel (Mejora 4D) -->
-        <div class="activity-panel">
-          <div class="activity-header" id="activity-header-toggle">
-            <div class="activity-title-area">
-              <span class="activity-icon">📋</span>
-              <span class="activity-title">Registro de Actividad</span>
-            </div>
-            <span class="activity-arrow" id="activity-arrow">▼</span>
-          </div>
-          <div class="activity-body collapsed" id="activity-log-body">
-            <div class="activity-log-container" id="activity-log-content">
-              <div class="log-empty-msg">Sin actividad reciente.</div>
-            </div>
-          </div>
-        </div>
-
         <!-- Quick Launch Grid -->
         <div class="launcher-panel">
-          <h3>🚀 Inicio Rápido</h3>
+          <div class="panel-section-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span>Acciones Rápidas</span>
+          </div>
           <div class="launcher-grid">
             <button class="launcher-btn" id="launch-desktop" data-mode="desktop">
-              <div class="launcher-icon">💻</div>
+              <div class="launcher-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+              </div>
               <span class="launcher-label">Escritorio</span>
-              <span class="launcher-sub" id="lbl-desktop-count">0 / 30</span>
+              <span class="launcher-sub" id="lbl-desktop-count">0 / 90 pts</span>
               <div class="launcher-progress"><div class="launcher-progress-fill" id="progress-desktop" style="width: 0%"></div></div>
             </button>
+            
             <button class="launcher-btn launcher-btn-primary" id="launch-all">
-              <div class="launcher-icon">⚡</div>
+              <div class="launcher-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+              </div>
               <span class="launcher-label">Ejecutar Todos</span>
               <span class="launcher-sub">Secuencial</span>
             </button>
+
             <button class="launcher-btn launcher-btn-gift" id="launch-daily-tasks">
-              <div class="launcher-icon">🎁</div>
+              <div class="launcher-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" rx="1" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+                </svg>
+              </div>
               <span class="launcher-label">Reclamar Tareas</span>
               <span class="launcher-sub">Daily Set + Más</span>
             </button>
@@ -207,7 +247,12 @@
         <!-- Daily Tasks Mini Status -->
         <div class="daily-tasks-mini">
           <div class="daily-tasks-header">
-            <span class="daily-tasks-title">🎯 Tareas Diarias</span>
+            <div class="panel-section-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" rx="1" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+              </svg>
+              <span>Tareas Diarias del Dashboard</span>
+            </div>
             <span class="daily-tasks-count skeleton-text" id="daily-tasks-count">—</span>
           </div>
           <div class="launcher-progress" style="position: relative; height: 3px; border-radius: 2px; margin-bottom: 10px; background: var(--bg-app);">
@@ -215,12 +260,39 @@
           </div>
           <div class="daily-tasks-list" id="daily-tasks-list">
             <div class="task-item pending skeleton-item">
-              <span class="task-icon">⏳</span>
-              <span class="task-name">Cargando tareas...</span>
+              <span class="task-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9" /><polyline points="12 6 12 12 16 14" />
+                </svg>
+              </span>
+              <span class="task-name">Cargando tareas detectadas...</span>
             </div>
           </div>
-          <div style="text-align: center; margin-top: 10px;">
-            <a href="https://rewards.bing.com" target="_blank" class="text-link" id="open-rewards-link">Abrir Microsoft Rewards ↗</a>
+          <div class="rewards-link-row">
+            <a href="https://rewards.bing.com" target="_blank" class="text-link" id="open-rewards-link">
+              <span>Abrir Microsoft Rewards</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- Activity Log Panel -->
+        <div class="activity-panel">
+          <div class="activity-header" id="activity-header-toggle">
+            <div class="activity-title-area">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              <span class="activity-title">Registro de Actividad en Vivo</span>
+            </div>
+            <span class="activity-arrow" id="activity-arrow">▼</span>
+          </div>
+          <div class="activity-body collapsed" id="activity-log-body">
+            <div class="activity-log-container" id="activity-log-content">
+              <div class="log-empty-msg">Sin actividad reciente registrada.</div>
+            </div>
           </div>
         </div>
 
@@ -232,26 +304,36 @@
           
           <!-- Search Counts -->
           <div class="form-group">
-            <h3>🔢 Cantidad de Búsquedas</h3>
-            <div class="grid-col-3">
+            <div class="form-group-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <span>Cantidad de Búsquedas</span>
+            </div>
+            <div class="grid-col-1">
               <div>
-                <label>PC</label>
-                <input type="number" id="set-desktop-searches" min="0" max="50" value="30">
+                <label for="set-desktop-searches">Búsquedas PC (Escritorio)</label>
+                <input type="number" id="set-desktop-searches" min="1" max="50" value="30">
               </div>
             </div>
           </div>
 
           <!-- Timing -->
           <div class="form-group">
-            <h3>⏱️ Tiempos de Espera</h3>
+            <div class="form-group-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
+              </svg>
+              <span>Tiempos de Espera y Lectura</span>
+            </div>
             <div class="grid-col-2">
               <div>
-                <label>Mínimo (seg)</label>
-                <input type="number" id="set-min-delay" min="1" max="300" value="6">
+                <label for="set-min-delay">Mínimo (seg)</label>
+                <input type="number" id="set-min-delay" min="1" max="120" value="6">
               </div>
               <div>
-                <label>Máximo (seg)</label>
-                <input type="number" id="set-max-delay" min="1" max="300" value="15">
+                <label for="set-max-delay">Máximo (seg)</label>
+                <input type="number" id="set-max-delay" min="2" max="300" value="15">
               </div>
             </div>
             <div class="switch-row mt-2">
@@ -259,17 +341,22 @@
                 <input type="checkbox" id="set-enable-random-delay" checked>
                 <span class="slider"></span>
               </label>
-              <span class="switch-label">Tiempos de espera aleatorios</span>
+              <span class="switch-label">Tiempos de espera aleatorios (Antidetección)</span>
             </div>
             <div class="mt-2">
-              <label>Tiempo base entre búsquedas (s)</label>
-              <input type="number" id="set-cooldown" min="1" max="60" value="2">
+              <label for="set-cooldown">Pausa base entre búsquedas (seg)</label>
+              <input type="number" id="set-cooldown" min="0" max="60" value="2">
             </div>
           </div>
 
           <!-- General Options -->
           <div class="form-group">
-            <h3>⚙️ Opciones Generales</h3>
+            <div class="form-group-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              <span>Opciones Generales & Notificaciones</span>
+            </div>
             <div class="switch-row">
               <label class="switch">
                 <input type="checkbox" id="set-auto-close" checked>
@@ -278,23 +365,28 @@
               <span class="switch-label">Cerrar pestaña automáticamente al terminar</span>
             </div>
             <div class="mt-2">
-              <label>Webhook (Discord/Telegram) para Notificaciones:</label>
+              <label for="set-webhook-url">Webhook (Discord / Telegram) para Alertas:</label>
               <input type="text" id="set-webhook-url" placeholder="https://discord.com/api/webhooks/..." style="width: 100%;">
-              <span class="field-hint">Recibe alertas cuando la extensión inicie, termine o falle un ciclo de tareas.</span>
+              <span class="field-hint">Recibe alertas en tu móvil cuando la extensión complete o pause tareas.</span>
             </div>
           </div>
 
           <!-- Query Source -->
           <div class="form-group">
-            <h3>🔤 Origen de las Palabras</h3>
+            <div class="form-group-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v3m0 12v3M3 12h3m12 0h3m-2.4-6.6-2.1 2.1m-9 9-2.1 2.1m0-13.2 2.1 2.1m9 9 2.1 2.1" /><circle cx="12" cy="12" r="3" />
+              </svg>
+              <span>Origen de las Palabras de Búsqueda</span>
+            </div>
             <div class="radio-group">
               <label class="radio-label">
                 <input type="radio" name="querySource" value="random" checked>
-                <span>Palabras Aleatorias Integradas</span>
+                <span>Palabras Aleatorias Orgánicas (300+ temas)</span>
               </label>
               <label class="radio-label">
                 <input type="radio" name="querySource" value="trends">
-                <span>Búsquedas Populares (Google Trends RSS)</span>
+                <span>Tendencias en Vivo (Google Trends RSS)</span>
               </label>
               <label class="radio-label">
                 <input type="radio" name="querySource" value="custom">
@@ -302,13 +394,15 @@
               </label>
             </div>
             <div id="custom-queries-area" style="display: none;" class="mt-2">
-              <textarea id="set-custom-queries" rows="3" placeholder="palabra1, palabra2, palabra3..."></textarea>
+              <textarea id="set-custom-queries" rows="3" placeholder="tecnología, clima hoy, recetas saludables, noticias..."></textarea>
             </div>
           </div>
 
           <button type="submit" class="btn btn-primary full-width">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-            Guardar Ajustes
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
+            </svg>
+            <span>Guardar Ajustes</span>
           </button>
         </form>
       </div>
@@ -317,22 +411,27 @@
       <div class="tab-content" id="tab-schedule">
         <form id="schedule-form">
           <div class="form-group">
-            <h3>📅 Programación Automática</h3>
+            <div class="form-group-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
+              </svg>
+              <span>Programación Diaria Automática</span>
+            </div>
             <div class="switch-row">
               <label class="switch">
                 <input type="checkbox" id="set-schedule-enabled">
                 <span class="slider"></span>
               </label>
-              <span class="switch-label">Habilitar búsqueda diaria automática</span>
+              <span class="switch-label">Habilitar ejecución automática diaria</span>
             </div>
             
             <div id="schedule-config-area" style="display: none;">
               <div class="mt-2">
-                <label>Hora de ejecución</label>
+                <label for="set-schedule-time">Hora objetivo de inicio</label>
                 <input type="time" id="set-schedule-time" value="09:00">
               </div>
               
-              <label class="mt-2 block">Días activos</label>
+              <label class="mt-2 block">Días de la semana activos</label>
               <div class="days-selector">
                 <label class="day-chip"><input type="checkbox" value="Mon"><span>L</span></label>
                 <label class="day-chip"><input type="checkbox" value="Tue"><span>M</span></label>
@@ -344,15 +443,19 @@
               </div>
               
               <div class="schedule-info-box">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                <span>La ejecución incluirá ±30 min de variación aleatoria para evitar detección de patrones.</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span>La ejecución incluye un jitter de ±30 min aleatorio para evitar detección por patrones de horario fijos.</span>
               </div>
             </div>
           </div>
 
           <button type="submit" class="btn btn-primary full-width">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            Guardar Horario
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
+            </svg>
+            <span>Guardar Horario</span>
           </button>
         </form>
       </div>
@@ -360,10 +463,17 @@
       <!-- ============ TAB: HISTORY ============ -->
       <div class="tab-content" id="tab-history">
         <div class="history-header">
-          <h3>📊 Sesiones Recientes</h3>
+          <div class="panel-section-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+            <span>Sesiones Recientes</span>
+          </div>
           <button class="btn btn-sm btn-secondary" id="btn-clear-history">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-            Limpiar
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+            <span>Limpiar</span>
           </button>
         </div>
         <div class="history-list-wrapper">
@@ -385,12 +495,21 @@
 
     </main>
 
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Footer                                          -->
+    <!-- ═══════════════════════════════════════════════ -->
     <footer class="app-footer">
-      Rewards Auto Search & Claimer v4.2.0 — Automatización Inteligente
+      <div class="footer-content">
+        <span>Rewards Auto v4.3.0</span>
+        <span class="footer-dot-sep">•</span>
+        <span class="system-status-indicator">
+          <span class="live-pulse-dot"></span>
+          <span>Sistema Activo</span>
+        </span>
+      </div>
     </footer>
   </div>
 
-  <!-- Note: Floating panel DOM nodes are dynamically generated and injected by content.js into rewards pages -->
   <script src="popup.js"></script>
 </body>
 </html>

@@ -21,6 +21,16 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
       sendResponse({ success: true });
       return true;
     }
+
+    if (message.action === "startAutoClaimAll") {
+      console.log("[RewardsBot] Orden recibida: Ejecutando reclamación automática de tareas...");
+      setTimeout(async () => {
+        await runFullScan();
+        runClaimAll();
+      }, 2000);
+      sendResponse({ success: true });
+      return true;
+    }
   });
 
   // Escuchar cambios en stats y session para actualizar el panel flotante
@@ -220,6 +230,15 @@ if (isRewardsPage) {
 
 // --- BING SEARCH QUIZ/POLL AUTO-SOLVER & HUMANIZATION ---
 if (isSearchPage) {
+  // Overriding Page Visibility API for 100% search point recognition on background tabs
+  try {
+    Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+    Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+    Object.defineProperty(document, 'hasFocus', { get: () => true, configurable: true });
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('focus'));
+  } catch (e) {}
+
   // Guardar flag si proviene de rewards.bing.com (tarea clickeada)
   if (document.referrer && document.referrer.includes("rewards.bing.com")) {
     sessionStorage.setItem("isRewardsTaskTab", "true");
@@ -1232,23 +1251,30 @@ function initRewardsPanel() {
   header.className = 'rap-header';
   header.innerHTML = `
     <div class="rap-header-brand">
-      <div class="rap-header-icon">⭐</div>
+      <div class="rap-header-icon">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+      </div>
       <div>
         <span class="rap-header-title">Rewards <span>Auto</span><span class="rap-activity-dot" id="rap-activity-dot"></span></span>
-        <span class="rap-header-version">v4.2.0</span>
+        <span class="rap-header-version">v4.3.0</span>
       </div>
     </div>
-    <div id="rap-header-points-container" style="display: none; align-items: center; background: rgba(255, 255, 255, 0.15); padding: 4px 10px; border-radius: 20px; margin-left: auto; margin-right: 15px; border: 1px solid rgba(255,255,255,0.1);">
-      <span style="font-size: 14px; font-weight: bold; color: #ffeb3b; text-shadow: 0 0 5px rgba(255,235,59,0.5);">🪙 <span id="rap-header-points-value">--</span></span>
+    <div id="rap-header-points-container" style="display: none; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.08); padding: 3px 8px; border-radius: 12px; margin-left: auto; margin-right: 10px; border: 1px solid rgba(245, 158, 11, 0.3);">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+      <span style="font-size: 11px; font-weight: 700; color: #f59e0b; font-family: monospace;" id="rap-header-points-value">--</span>
     </div>
     <div class="rap-header-actions">
       <button class="rap-btn-icon minimize" title="Minimizar">
-        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
       </button>
       <button class="rap-btn-icon close" title="Cerrar">
-        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -1275,18 +1301,19 @@ function initRewardsPanel() {
   footer.className = 'rap-footer';
   footer.innerHTML = `
     <button class="rap-claim-all-btn" id="rap-claim-all" disabled style="opacity: 0.5;">
-      <span>🚀</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      </svg>
       <span>Reclamar Todo Automáticamente</span>
     </button>
     <div class="rap-footer-meta">
       <button class="rap-refresh-btn" id="rap-last-update">
-        <svg class="refresh-icon" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M23 4v6h-6M1 20v-6h6"/>
-          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        <svg class="refresh-icon" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
         </svg>
         <span class="refresh-text">Escanear</span>
       </button>
-      <span>Rewards Auto v4.2.0</span>
+      <span>Rewards Auto v4.3.0</span>
     </div>
   `;
 
@@ -1394,16 +1421,16 @@ function showToast(title, message, type = 'info', duration = 4000) {
   if (!container) return;
 
   const icons = {
-    success: '✅',
-    error: '❌',
-    warning: '⚠️',
-    info: 'ℹ️'
+    success: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>`,
+    error: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>`,
+    warning: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>`,
+    info: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>`
   };
 
   const toast = document.createElement('div');
   toast.className = `rap-toast ${type}`;
   toast.innerHTML = `
-    <span class="rap-toast-icon">${icons[type]}</span>
+    <span class="rap-toast-icon">${icons[type] || icons.info}</span>
     <div class="rap-toast-content">
       <div class="rap-toast-title">${title}</div>
       <div class="rap-toast-message">${message}</div>
@@ -1444,9 +1471,13 @@ function renderSections() {
   `;
   body.appendChild(progressContainer);
 
+  const zapSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>`;
+  const giftSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" rx="1" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" /></svg>`;
+  const gridSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /></svg>`;
+
   // Daily Set
   body.appendChild(createSection('dailySet', {
-    icon: '🎯',
+    icon: zapSvg,
     title: 'Conjunto Diario',
     color: THEME.daily.color,
     glow: THEME.daily.glow,
@@ -1455,7 +1486,7 @@ function renderSections() {
 
   // More Activities
   body.appendChild(createSection('moreActivities', {
-    icon: '🎁',
+    icon: giftSvg,
     title: 'Más Actividades',
     color: THEME.more.color,
     glow: THEME.more.glow,
@@ -1464,7 +1495,7 @@ function renderSections() {
 
   // Punch Cards
   body.appendChild(createSection('punchCards', {
-    icon: '🃏',
+    icon: gridSvg,
     title: 'Punch Cards',
     color: THEME.punch.color,
     glow: THEME.punch.glow,
@@ -1543,7 +1574,9 @@ function createSection(key, config) {
   } else if (tasks.length === 0) {
     content.innerHTML += `
       <div class="rap-empty-state">
-        <div class="rap-empty-state-icon">🔍</div>
+        <div class="rap-empty-state-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+        </div>
         <div class="rap-empty-state-text">No detectadas</div>
         <div class="rap-empty-state-sub">Las tareas aparecerán al escanear</div>
       </div>
@@ -1597,11 +1630,13 @@ function createStreakSection() {
   section.style.setProperty('--section-glow', THEME.streak.glow);
   section.style.setProperty('--section-bg', THEME.streak.bg);
 
+  const flameSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A3.5 3.5 0 0 0 12 18a3.5 3.5 0 0 0 3.5-3.5c0-2-1.5-3.5-2.5-5-.5 1-1 1.5-1.5 1.5s-.8-.5-.8-1.2c0-2.3 2-4.8 2.8-6.8-3 1.2-5.5 4.5-5.5 8 0 .5.1 1 .2 1.5z"></path><path d="M12 22a8 8 0 0 0 8-8c0-4-2.5-7.5-5.5-10.5-1 1.8-2 3.5-2 5.5 0 1.5.8 2.8 1.5 4-1.5 0-3-1-3.5-2.5-1 1.5-1.5 3-1.5 4.5 0 1.2.4 2.3 1 3.2A5.8 5.8 0 0 1 6 14c0-3.2 2-6 4.5-8.2C7 8 4 11.5 4 15.5A8 8 0 0 0 12 22z"></path></svg>`;
+
   const header = document.createElement('div');
   header.className = 'rap-section-header';
   header.innerHTML = `
     <div class="rap-section-header-left">
-      <div class="rap-section-icon">🔥</div>
+      <div class="rap-section-icon">${flameSvg}</div>
       <span class="rap-section-title">Bono de Racha</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
@@ -1633,7 +1668,9 @@ function createStreakSection() {
   } else if (!streakData) {
     content.innerHTML = `
       <div class="rap-empty-state">
-        <div class="rap-empty-state-icon">🔥</div>
+        <div class="rap-empty-state-icon">
+          ${flameSvg}
+        </div>
         <div class="rap-empty-state-text">No detectado</div>
         <div class="rap-empty-state-sub">Inicia sesión en Rewards</div>
       </div>
@@ -1643,17 +1680,21 @@ function createStreakSection() {
     content.innerHTML = `
       <div class="rap-streak-card">
         <div class="rap-streak-info">
-          <div class="rap-streak-days">${streakData.streakDays}🔥</div>
-          <div class="rap-streak-label">Días de racha</div>
+          <div class="rap-streak-days" style="display:flex; align-items:center; gap:4px;">${streakData.streakDays} <span style="font-size:16px;">🔥</span></div>
+          <div class="rap-streak-label">Días de racha activa</div>
         </div>
         <button class="rap-streak-claim-btn ${isClaimed ? 'claimed' : ''}" 
                 ${isClaimed ? 'disabled' : ''}
-                id="rap-streak-claim-btn">
+                id="rap-streak-claim-btn" title="${isClaimed ? 'Bono reclamado' : 'Reclamar bono'}">
           ${isClaimed ? `
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-          ` : '🎁'}
+          ` : `
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" rx="1" /><line x1="12" y1="22" x2="12" y2="7" />
+            </svg>
+          `}
         </button>
       </div>
     `;
@@ -2368,7 +2409,7 @@ function solveActiveTasks() {
 }
 
 // ============================================================
-// HELPERS PARA MEJORAS VISUALES Y DE UX (v4.2.0)
+// HELPERS PARA MEJORAS VISUALES Y DE UX (v4.3.0)
 // ============================================================
 
 let rapAllCompleteTriggered = false;

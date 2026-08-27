@@ -37,10 +37,71 @@ const DEFAULT_SESSION = {
 };
 
 // ---------------------------------------------------------------------------
-// In-Memory Session Cache — avoids excessive chrome.storage.local reads
-// Updated in real-time via chrome.storage.onChanged listener.
+// In-Memory Session Cache & Execution State
 // ---------------------------------------------------------------------------
 let inMemorySession = null;
+let isLoopRunning = false;
+let keepAliveInterval = null;
+
+/**
+ * Periodically calls an extension API to keep the MV3 Service Worker alive
+ * during active automation search sessions.
+ */
+function startKeepAlive() {
+  stopKeepAlive();
+  keepAliveInterval = setInterval(() => {
+    chrome.runtime.getPlatformInfo().catch(() => {});
+  }, 20000);
+}
+
+function stopKeepAlive() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+  }
+}
+
+/**
+ * Safely creates a tab without throwing "No current window" error in MV3 Service Worker.
+ * If no normal window is open, it creates a new window.
+ * @param {chrome.tabs.CreateProperties} createProperties
+ * @returns {Promise<chrome.tabs.Tab>}
+ */
+async function createTabSafe(createProperties) {
+  try {
+    let windowId = createProperties.windowId;
+    if (!windowId) {
+      const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+      if (windows && windows.length > 0) {
+        const focusedWin = windows.find(w => w.focused) || windows[0];
+        windowId = focusedWin.id;
+      }
+    }
+    
+    if (windowId) {
+      return await chrome.tabs.create({ ...createProperties, windowId });
+    }
+    
+    // No existing normal window — create one
+    const newWin = await chrome.windows.create({
+      url: createProperties.url || "https://www.bing.com",
+      focused: createProperties.active !== false
+    });
+    return (newWin.tabs && newWin.tabs.length > 0) ? newWin.tabs[0] : null;
+  } catch (err) {
+    console.warn("[RewardsBot] createTabSafe fallback creating window due to:", err);
+    try {
+      const newWin = await chrome.windows.create({
+        url: createProperties.url || "https://www.bing.com",
+        focused: createProperties.active !== false
+      });
+      return (newWin.tabs && newWin.tabs.length > 0) ? newWin.tabs[0] : null;
+    } catch (winErr) {
+      console.error("[RewardsBot] Failed to create window fallback:", winErr);
+      throw winErr;
+    }
+  }
+}
 
 // Hydrate session cache from storage on SW startup
 chrome.storage.local.get('session', (data) => {
@@ -89,7 +150,6 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 // ---------------------------------------------------------------------------
 // Service Worker Recovery — handles SW restart after Chrome kills it.
-// If the SW was killed during an active session, we recover gracefully.
 // ---------------------------------------------------------------------------
 chrome.runtime.onStartup.addListener(async () => {
   console.log('[RewardsBot][startup] Service Worker starting up...');
@@ -97,25 +157,28 @@ chrome.runtime.onStartup.addListener(async () => {
     const data = await chrome.storage.local.get(['session', 'settings']);
     const session = data.session;
     
-    if (session && (session.status === 'running' || session.status === 'paused')) {
-      console.warn('[RewardsBot][startup] Found orphaned session in state:', session.status);
-      // Mark as stopped — the user can restart manually
-      session.status = 'stopped';
-      await chrome.storage.local.set({ session });
-      
-      // Clean up any tracked tabs
-      await cleanupSessionTabs();
-      await clearAllAutomationTabs();
-      
-      // Log and notify
-      await appendActivityLog('⚠️ Sesión recuperada: el navegador se reinició durante una sesión activa');
-      
-      // Reset to idle
-      await chrome.storage.local.set({ session: DEFAULT_SESSION });
-      console.log('[RewardsBot][startup] Orphaned session cleaned up successfully.');
+    if (session && session.status === 'running') {
+      const sessionAge = Date.now() - (session.startTime || 0);
+      if (session.currentIndex < session.totalSearches && sessionAge < 1800000) {
+        console.log('[RewardsBot][startup] Resuming active session from startup...');
+        await appendActivityLog(`🔄 Reanudando sesión activa tras reinicio (${session.currentIndex}/${session.totalSearches})`);
+        if (!isLoopRunning) {
+          runSessionLoop(session);
+        }
+      } else {
+        console.warn('[RewardsBot][startup] Found stale session in state:', session.status);
+        session.status = 'stopped';
+        await chrome.storage.local.set({ session });
+        await cleanupSessionTabs();
+        await clearAllAutomationTabs();
+        await appendActivityLog('⚠️ Sesión anterior finalizada por tiempo');
+        await chrome.storage.local.set({ session: DEFAULT_SESSION });
+      }
+    } else if (session && session.status === 'paused') {
+      console.log('[RewardsBot][startup] Session remains paused.');
     }
     
-    // Re-create periodic alarms (they don't survive browser restart)
+    // Re-create periodic alarms
     chrome.alarms.create('check-schedule', { periodInMinutes: 1 });
     chrome.alarms.create('daily-tasks-reminder', { periodInMinutes: 30 });
     updateScheduleAlarm();
@@ -357,13 +420,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "openAndCloseTab") {
     (async () => {
       try {
-        const tab = await chrome.tabs.create({ url: message.url, active: false });
-        await registerAutomationTab(tab.id);
-        await trackOpenedTab(tab.id);
-        // Use chrome.alarms instead of setTimeout — safe for SW lifecycle
-        const alarmName = `close-tab-${tab.id}-${Date.now()}`;
-        chrome.alarms.create(alarmName, { delayInMinutes: (message.delay || 6000) / 60000 });
-        // The alarm handler (in onAlarm listener) will close the tab
+        const tab = await createTabSafe({ url: message.url, active: false });
+        if (tab && tab.id) {
+          await registerAutomationTab(tab.id);
+          await trackOpenedTab(tab.id);
+          // Use chrome.alarms instead of setTimeout — safe for SW lifecycle
+          const alarmName = `close-tab-${tab.id}-${Date.now()}`;
+          chrome.alarms.create(alarmName, { delayInMinutes: (message.delay || 6000) / 60000 });
+          // The alarm handler (in onAlarm listener) will close the tab
+        }
       } catch (e) {
         console.error('[RewardsBot] openAndCloseTab error:', e);
       }
@@ -379,9 +444,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Abrir la página de Rewards y dejar que el content script haga su trabajo
+  // Abrir la página de Rewards y ejecutar el reclamo automático de tareas
   if (message.action === "runDailyTasks") {
-    openRewardsDashboard()
+    openRewardsDashboard(true)
       .then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
@@ -432,6 +497,14 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   } else if (alarm.name === "daily-tasks-reminder") {
     // Recordatorio de las 10 PM si no se han completado las tareas
     checkDailyTasksReminder();
+  } else if (alarm.name === "search-next-step") {
+    console.log("[RewardsBot] Alarm 'search-next-step' fired!");
+    const data = await chrome.storage.local.get("session");
+    const session = data.session;
+    if (session && session.status === "running" && !isLoopRunning) {
+      console.log("[RewardsBot] Resuming search loop from alarm at index:", session.currentIndex);
+      runSessionLoop(session);
+    }
   } else if (alarm.name.startsWith('close-tab-')) {
     // Dynamic alarm to close a temporary tab (replaces setTimeout for SW safety)
     const parts = alarm.name.split('-');
@@ -492,20 +565,33 @@ function waitForTabLoad(tabId, timeoutMs = 10000) {
 }
 
 // Abrir el dashboard de Rewards para que los content scripts trabajen
-async function openRewardsDashboard() {
+async function openRewardsDashboard(autoClaim = false) {
   // Verificar si ya hay una pestaña de rewards abierta
   const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
+  let targetTabId = null;
+
   if (tabs.length > 0) {
     // Recargar la pestaña existente sin robar el foco
-    await registerAutomationTab(tabs[0].id);
+    targetTabId = tabs[0].id;
+    await registerAutomationTab(targetTabId);
     await appendActivityLog("🎯 Recargando dashboard de Rewards para reclamar tareas");
-    await chrome.tabs.reload(tabs[0].id);
+    await chrome.tabs.reload(targetTabId);
   } else {
     // Abrir nueva pestaña en segundo plano (no roba foco al usuario)
-    const newTab = await chrome.tabs.create({ url: "https://rewards.bing.com/earn", active: false });
-    await registerAutomationTab(newTab.id);
-    await trackOpenedTab(newTab.id);
-    await appendActivityLog("🎯 Abriendo dashboard de Rewards en segundo plano");
+    const newTab = await createTabSafe({ url: "https://rewards.bing.com/earn", active: false });
+    if (newTab && newTab.id) {
+      targetTabId = newTab.id;
+      await registerAutomationTab(targetTabId);
+      await trackOpenedTab(targetTabId);
+      await appendActivityLog("🎯 Abriendo dashboard de Rewards en segundo plano");
+    }
+  }
+
+  if (targetTabId && autoClaim) {
+    await waitForTabLoad(targetTabId, 10000);
+    setTimeout(() => {
+      chrome.tabs.sendMessage(targetTabId, { action: "startAutoClaimAll" }).catch(() => {});
+    }, 2000);
   }
 }
 
@@ -528,7 +614,7 @@ function showNotification(title, message) {
 chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
   if (notificationId === "rewards-session-completed") {
     if (buttonIndex === 0) {
-      chrome.tabs.create({ url: "https://rewards.bing.com", active: true });
+      createTabSafe({ url: "https://rewards.bing.com", active: true }).catch(() => {});
     }
     chrome.notifications.clear(notificationId);
   }
@@ -610,9 +696,13 @@ async function generateQueries(source, count, customQueriesRaw) {
     const topics = self.SEARCH_TOPICS || ["microsoft rewards", "bing search", "google vs bing", "xbox games"];
     const shuffled = [...topics].sort(() => 0.5 - Math.random());
     
-    // Fill remaining items
+    // Fill remaining items with natural humanized variations
     while (list.length < count) {
-      list.push(shuffled[list.length % shuffled.length]);
+      if (typeof self.getHumanizedSearchQuery === "function" && Math.random() > 0.3) {
+        list.push(self.getHumanizedSearchQuery());
+      } else {
+        list.push(shuffled[list.length % shuffled.length]);
+      }
     }
   }
   
@@ -626,8 +716,13 @@ async function startSearchSession(mode, queue = []) {
   const settings = storage.settings || DEFAULT_SETTINGS;
   const currentSession = storage.session || DEFAULT_SESSION;
 
-  if (currentSession.status === "running" || currentSession.status === "paused") {
-    throw new Error("A search session is already active.");
+  if (isLoopRunning || (currentSession.status === "running" && currentSession.currentIndex < currentSession.totalSearches)) {
+    if (!isLoopRunning) {
+      console.log("[RewardsBot] Session marked as running but loop inactive. Resuming loop...");
+      runSessionLoop(currentSession);
+      return;
+    }
+    throw new Error("Una sesión de búsqueda ya está activa.");
   }
 
   // Check if today's searches for this mode are already completed
@@ -717,27 +812,50 @@ async function startSearchSession(mode, queue = []) {
 
 // Session loop orchestrator
 async function runSessionLoop(session) {
+  if (isLoopRunning) {
+    console.log("[RewardsBot] Loop is already running, skipping duplicate invocation.");
+    return;
+  }
+  isLoopRunning = true;
+  startKeepAlive();
+
   try {
     const storage = await chrome.storage.local.get("settings");
     const settings = storage.settings || DEFAULT_SETTINGS;
 
-    // Create the search tab
-    const tab = await chrome.tabs.create({
-      url: "https://www.bing.com/#ua=" + session.mode,
-      active: false // runs in background
-    });
-    
-    session.tabId = tab.id;
-    await registerAutomationTab(tab.id); // Mark as automation-controlled
-    
-    // Mobile debugger emulation removed — mobile searches no longer earn points
-    
-    if (!session.openedTabIds) session.openedTabIds = [];
-    if (!session.openedTabIds.includes(tab.id)) session.openedTabIds.push(tab.id);
-    await chrome.storage.local.set({ session });
+    // Check if session.tabId already exists and is still valid
+    let currentTab = null;
+    if (session.tabId) {
+      try {
+        currentTab = await chrome.tabs.get(session.tabId);
+      } catch (e) {
+        currentTab = null;
+      }
+    }
 
-    // Wait for the page to fully load (event-driven, with 10s timeout fallback)
-    await waitForTabLoad(tab.id, 10000);
+    if (!currentTab) {
+      // Create the search tab safely (prevents "No current window" error)
+      const tab = await createTabSafe({
+        url: "https://www.bing.com/#ua=" + session.mode,
+        active: false // runs in background
+      });
+
+      if (!tab || !tab.id) {
+        throw new Error("No se pudo crear la pestaña de búsqueda.");
+      }
+
+      session.tabId = tab.id;
+      await registerAutomationTab(tab.id); // Mark as automation-controlled
+
+      if (!session.openedTabIds) session.openedTabIds = [];
+      if (!session.openedTabIds.includes(tab.id)) session.openedTabIds.push(tab.id);
+      await chrome.storage.local.set({ session });
+
+      // Wait for the page to fully load (event-driven, with 10s timeout fallback)
+      await waitForTabLoad(tab.id, 10000);
+    } else {
+      await registerAutomationTab(currentTab.id);
+    }
 
     while (session.currentIndex < session.totalSearches) {
       // Use in-memory cache for rapid status checks (avoids storage polling)
@@ -769,6 +887,15 @@ async function runSessionLoop(session) {
         await chrome.scripting.executeScript({
           target: { tabId: session.tabId },
           func: (searchQuery, fallbackUrl) => {
+             // OVERRIDE PAGE VISIBILITY API & FOCUS (Garantiza 100% de puntos en búsquedas en segundo plano)
+             try {
+                Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+                Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+                Object.defineProperty(document, 'hasFocus', { get: () => true, configurable: true });
+                window.dispatchEvent(new Event('focus'));
+                document.dispatchEvent(new Event('focus'));
+             } catch(e) {}
+
              const input = document.querySelector('textarea[name="q"], input[name="q"], #sb_form_q');
              if (!input) {
                 // Si no hay barra de búsqueda (ej. la página no cargó bien), navegar directo
@@ -846,17 +973,19 @@ async function runSessionLoop(session) {
         // Fallback si la inyección de script falla (ej. pestaña cerrada o página aún cargando la primera vez)
         console.log("Scripting falló, navegando directamente...", e);
         try {
-          const newTab = await chrome.tabs.update(session.tabId, { url: searchUrl });
+          await chrome.tabs.update(session.tabId, { url: searchUrl });
         } catch (err) {
           // Tab was closed by user, recreate it
           console.log("Search tab was closed, recreating...");
-          const newTab = await chrome.tabs.create({ url: searchUrl, active: false });
-          session.tabId = newTab.id;
-          if (!session.openedTabIds) session.openedTabIds = [];
-          if (!session.openedTabIds.includes(newTab.id)) session.openedTabIds.push(newTab.id);
-          await registerAutomationTab(newTab.id); // Mark recreated tab as automation-controlled
-          await chrome.storage.local.set({ session });
-          await waitForTabLoad(newTab.id, 10000);
+          const newTab = await createTabSafe({ url: searchUrl, active: false });
+          if (newTab && newTab.id) {
+            session.tabId = newTab.id;
+            if (!session.openedTabIds) session.openedTabIds = [];
+            if (!session.openedTabIds.includes(newTab.id)) session.openedTabIds.push(newTab.id);
+            await registerAutomationTab(newTab.id); // Mark recreated tab as automation-controlled
+            await chrome.storage.local.set({ session });
+            await waitForTabLoad(newTab.id, 10000);
+          }
         }
       }
 
@@ -903,15 +1032,32 @@ async function runSessionLoop(session) {
       }
       await appendActivityLog(`⏳ Esperando ${Math.round(delayMs / 1000)}s...`);
 
-      // Wait the delay using in-memory session cache (avoids 5 reads/sec to storage)
+      // Set backup alarm in case SW is suspended during delay
+      try {
+        await chrome.alarms.create("search-next-step", { when: Date.now() + delayMs });
+      } catch (e) {
+        console.warn("[RewardsBot] Could not create search-next-step alarm:", e);
+      }
+
+      // Wait the delay using in-memory session cache
       const startDelay = Date.now();
+      let wasInterrupted = false;
       while (Date.now() - startDelay < delayMs) {
-        // Check in-memory cache — updated in real-time by storage.onChanged listener
         const cached = inMemorySession;
         if (!cached || cached.status === "stopped" || cached.status === "paused") {
+          wasInterrupted = true;
           break;
         }
         await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      // Clear the backup alarm since wait completed in memory
+      try {
+        await chrome.alarms.clear("search-next-step");
+      } catch (e) {}
+
+      if (wasInterrupted) {
+        continue;
       }
     }
 
@@ -946,9 +1092,7 @@ async function runSessionLoop(session) {
         }
       }
 
-      // Mobile debugger detach removed — mobile mode no longer exists
-
-      // Check queue for next mode (Desktop -> Mobile chaining)
+      // Check queue for next mode (Desktop -> Edge chaining)
       if (session.modesQueue && session.modesQueue.length > 0) {
         const nextMode = session.modesQueue[0];
         const remainingQueue = session.modesQueue.slice(1);
@@ -961,7 +1105,7 @@ async function runSessionLoop(session) {
         // Idle out
         console.log("All queued search sessions finished!");
         
-        // Show summary notification (Mejora 4B)
+        // Show summary notification
         try {
           const durationMs = session.startTime ? (Date.now() - session.startTime) : 0;
           const durationMin = Math.floor(durationMs / 60000);
@@ -989,7 +1133,6 @@ async function runSessionLoop(session) {
           session: DEFAULT_SESSION
         });
         notifyPopup();
-        // Reprogramar la próxima ejecución (para aplicar nuevo jitter al día siguiente)
         updateScheduleAlarm();
         await sendWebhookNotification(`✅ Todos los modos de búsqueda han finalizado correctamente.`);
       }
@@ -1005,11 +1148,17 @@ async function runSessionLoop(session) {
 
   } catch (error) {
     console.error("Error in session loop:", error);
-    await clearAllAutomationTabs(); // Clean up on error too
+    await clearAllAutomationTabs();
     await cleanupSessionTabs();
     await appendActivityLog(`❌ Error: ${error.message || error}`);
     await chrome.storage.local.set({ session: DEFAULT_SESSION });
     notifyPopup();
+  } finally {
+    isLoopRunning = false;
+    stopKeepAlive();
+    try {
+      await chrome.alarms.clear("search-next-step");
+    } catch (e) {}
   }
 }
 
@@ -1020,6 +1169,10 @@ async function pauseSearchSession() {
   if (session && session.status === "running") {
     session.status = "paused";
     session.pausedTime = Date.now();
+    try {
+      await chrome.alarms.clear("search-next-step");
+    } catch (e) {}
+    stopKeepAlive();
     await appendActivityLog("⏸️ Automatización pausada");
     await chrome.storage.local.set({ session });
     notifyPopup();
@@ -1040,11 +1193,21 @@ async function resumeSearchSession() {
     await appendActivityLog("▶️ Automatización reanudada");
     await chrome.storage.local.set({ session });
     notifyPopup();
+    
+    // If the loop in memory is not running, restart it immediately
+    if (!isLoopRunning) {
+      console.log("[RewardsBot] Restarting search loop on resume from index:", session.currentIndex);
+      runSessionLoop(session);
+    }
   }
 }
 
 // Stop session
 async function stopSearchSession() {
+  try {
+    await chrome.alarms.clear("search-next-step");
+  } catch (e) {}
+  stopKeepAlive();
   const data = await chrome.storage.local.get("session");
   const session = data.session;
   if (session && (session.status === "running" || session.status === "paused")) {
@@ -1243,10 +1406,9 @@ async function triggerScheduledRun() {
   // reclamen las tareas diarias (Daily Set, More Activities, etc.)
   try {
     console.log("Paso 1: Abriendo dashboard de Rewards para tareas diarias...");
-    await openRewardsDashboard();
+    await openRewardsDashboard(true);
     // Dar tiempo suficiente para que los content scripts escaneen y reclamen
-    // (El panel se encarga de todo automáticamente)
-    await new Promise(resolve => setTimeout(resolve, 30000));
+    await new Promise(resolve => setTimeout(resolve, 35000));
     console.log("Paso 1 completado: Dashboard de Rewards procesado.");
   } catch (e) {
     console.warn("Error abriendo dashboard de Rewards:", e);
@@ -1633,6 +1795,9 @@ async function syncUserInfo() {
     console.log("No se pudo obtener Puntos/Racha del DOM, usando valor de API o previos.");
   }
 
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isToday = prevStats.lastUpdatedDate === todayStr;
+
   // Calculate final todayPoints by selecting the maximum value from all available sources
   let todayPointsCandidates = [];
   if (userStatus.todayPoints !== undefined && userStatus.todayPoints !== null) {
@@ -1644,7 +1809,7 @@ async function syncUserInfo() {
   if (domTodayPoints !== null) {
     todayPointsCandidates.push(domTodayPoints);
   }
-  if (prevStats.todayPoints > 0) {
+  if (isToday && prevStats.todayPoints > 0) {
     todayPointsCandidates.push(prevStats.todayPoints);
   }
   
@@ -1676,23 +1841,16 @@ async function syncUserInfo() {
     apiPcFound = true;
   }
 
-  const todayStr = new Date().toISOString().split("T")[0];
-  const isToday = prevStats.lastUpdatedDate === todayStr;
-
   let pcCurrent = 0, pcMax = 90;
 
   if (isToday) {
     // If lastUpdatedDate is today, only update if the new points from the API are >= the cached points.
-    
-    // PC Search
     const prevPcCurrent = prevStats.pcSearch ? (prevStats.pcSearch.current || 0) : 0;
     const prevPcMax = prevStats.pcSearch ? (prevStats.pcSearch.max || 90) : 90;
     pcCurrent = (apiPcFound && apiPcCurrent >= prevPcCurrent) ? apiPcCurrent : prevPcCurrent;
     pcMax = (apiPcFound && apiPcMax > 0) ? apiPcMax : prevPcMax;
   } else {
-    // The day has changed. We can reset points to 0, but we preserve/default max points if API returns 0.
-    
-    // PC Search
+    // The day has changed. We reset points to 0, but preserve/default max points if API returns 0.
     if (apiPcFound) {
       pcCurrent = apiPcCurrent;
       pcMax = apiPcMax > 0 ? apiPcMax : (prevStats.pcSearch?.max || 90);
@@ -1712,8 +1870,6 @@ async function syncUserInfo() {
     detectedTier = "Member";
   }
 
-
-
   // Reliable Today Points using startOfDayPoints
   let startOfDayPoints = prevStats.startOfDayPoints || realTotalPoints;
   if (!isToday || startOfDayPoints > realTotalPoints) {
@@ -1728,11 +1884,11 @@ async function syncUserInfo() {
   }
 
   const stats = {
-    todayPoints: realTodayPoints || realTotalPoints,
-    totalPoints: realTotalPoints,
-    streak: realStreak,
+    todayPoints: (realTodayPoints !== undefined && realTodayPoints !== null) ? realTodayPoints : 0,
+    totalPoints: realTotalPoints || 0,
+    streak: realStreak || 0,
     level: detectedTier,
-    lastUpdatedDate: new Date().toISOString().split("T")[0],
+    lastUpdatedDate: todayStr,
     startOfDayPoints: startOfDayPoints,
     pcSearch: { current: pcCurrent, max: pcMax }
   };
