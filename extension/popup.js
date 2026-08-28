@@ -198,7 +198,7 @@ async function loadAllData() {
     setEnableRandomDelay.checked = settings.enableRandomDelay ?? true;
     setCooldown.value = settings.cooldownBetweenSearches ?? 2;
     setAutoClose.checked = settings.autoCloseTabs ?? true;
-    if (setRunActiveTab) setRunActiveTab.checked = settings.runSearchesInActiveTab ?? true;
+    if (setRunActiveTab) setRunActiveTab.checked = settings.runSearchesInActiveTab ?? false;
     if (setCooldown15min) setCooldown15min.checked = settings.cooldown15MinBatch ?? false;
     if (setWebhookUrl) setWebhookUrl.value = settings.webhookUrl || '';
     
@@ -669,7 +669,7 @@ function setupActionListeners() {
       enableRandomDelay: setEnableRandomDelay.checked,
       cooldownBetweenSearches: parseInt(setCooldown.value) || 2,
       autoCloseTabs: setAutoClose.checked,
-      runSearchesInActiveTab: setRunActiveTab ? setRunActiveTab.checked : true,
+      runSearchesInActiveTab: setRunActiveTab ? setRunActiveTab.checked : false,
       cooldown15MinBatch: setCooldown15min ? setCooldown15min.checked : false,
       webhookUrl: setWebhookUrl ? setWebhookUrl.value.trim() : '',
       querySource,

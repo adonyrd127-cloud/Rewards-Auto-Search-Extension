@@ -20,7 +20,7 @@ const DEFAULT_SETTINGS = {
   scheduleEnabled: false,
   activeDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
   autoStartNextMode: true,
-  runSearchesInActiveTab: true, // Ejecuta búsquedas en pestaña activa (Garantiza 100% de puntos)
+  runSearchesInActiveTab: false, // Búsqueda silenciosa en segundo plano por defecto (no interrumpe la navegación del usuario)
   cooldown15MinBatch: false // Modo Cooldown de 15 min (4 búsquedas por lote)
 };
 
@@ -597,15 +597,15 @@ async function openRewardsDashboard(autoClaim = false) {
     targetTabId = tabs[0].id;
     await registerAutomationTab(targetTabId);
     await appendActivityLog("🎯 Navegando a Microsoft Rewards (Ganar) para reclamar tareas");
-    await chrome.tabs.update(targetTabId, { url: targetUrl, active: true });
+    await chrome.tabs.update(targetTabId, { url: targetUrl });
   } else {
-    // Abrir nueva pestaña en Rewards
-    const newTab = await createTabSafe({ url: targetUrl, active: true });
+    // Abrir nueva pestaña en Rewards en segundo plano (active: false)
+    const newTab = await createTabSafe({ url: targetUrl, active: false });
     if (newTab && newTab.id) {
       targetTabId = newTab.id;
       await registerAutomationTab(targetTabId);
       await trackOpenedTab(targetTabId);
-      await appendActivityLog("🎯 Abriendo Microsoft Rewards (Ganar) para reclamar tareas");
+      await appendActivityLog("🎯 Abriendo Microsoft Rewards (Ganar) para reclamar tareas en segundo plano");
     }
   }
 
@@ -858,7 +858,7 @@ async function runSessionLoop(session) {
       // Create the search tab safely (prevents "No current window" error)
       const tab = await createTabSafe({
         url: "https://www.bing.com/#ua=" + session.mode,
-        active: settings.runSearchesInActiveTab !== false
+        active: settings.runSearchesInActiveTab === true
       });
 
       if (!tab || !tab.id) {
@@ -905,11 +905,12 @@ async function runSessionLoop(session) {
       const searchUrl = BING_SEARCH_URL + encodeURIComponent(query) + "&form=QBRE#ua=" + session.mode;
       
       try {
-        // Navegación determinista a la URL de búsqueda y activación de pestaña si está configurado
-        await chrome.tabs.update(session.tabId, {
-          url: searchUrl,
-          active: settings.runSearchesInActiveTab !== false
-        });
+        // Navegación determinista a la URL de búsqueda (solo activa la pestaña si el usuario lo configuró explícitamente)
+        const updateParams = { url: searchUrl };
+        if (settings.runSearchesInActiveTab === true) {
+          updateParams.active = true;
+        }
+        await chrome.tabs.update(session.tabId, updateParams);
         
         // Esperar a que la página de resultados cargue completamente
         await waitForTabLoad(session.tabId, 8000);
@@ -935,7 +936,7 @@ async function runSessionLoop(session) {
       } catch (e) {
         console.log("[RewardsBot] Error en ciclo de búsqueda:", e);
         try {
-          const newTab = await createTabSafe({ url: searchUrl, active: settings.runSearchesInActiveTab !== false });
+          const newTab = await createTabSafe({ url: searchUrl, active: settings.runSearchesInActiveTab === true });
           if (newTab && newTab.id) {
             session.tabId = newTab.id;
             await registerAutomationTab(newTab.id);

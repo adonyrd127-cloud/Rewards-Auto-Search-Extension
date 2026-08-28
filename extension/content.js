@@ -1306,7 +1306,7 @@ function initRewardsPanel() {
       </div>
       <div>
         <span class="rap-header-title">Rewards <span>Auto</span><span class="rap-activity-dot" id="rap-activity-dot"></span></span>
-        <span class="rap-header-version">v4.4.0</span>
+        <span class="rap-header-version">v4.4.4</span>
       </div>
     </div>
     <div id="rap-header-points-container" style="display: none; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.08); padding: 3px 8px; border-radius: 12px; margin-left: auto; margin-right: 10px; border: 1px solid rgba(245, 158, 11, 0.3);">
@@ -1361,7 +1361,7 @@ function initRewardsPanel() {
         </svg>
         <span class="refresh-text">Escanear</span>
       </button>
-      <span>Rewards Auto v4.4.0</span>
+      <span>Rewards Auto v4.4.4</span>
     </div>
   `;
 
