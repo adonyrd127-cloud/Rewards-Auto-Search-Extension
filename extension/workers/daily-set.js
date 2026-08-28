@@ -23,7 +23,11 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     'daily activities',
     'actividades diarias',
     'formas diarias de ganar',
-    'daily ways to earn'
+    'daily ways to earn',
+    'racha de conjunto diario',
+    'daily set streak',
+    'racha',
+    'streak'
   ];
 
   /** Patrones de URL para clasificar el tipo de tarea */
@@ -152,14 +156,43 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     console.log(`${TAG} Iniciando escaneo de Daily Set...`);
 
     const section = _findDailySetSection();
-    if (!section) {
-      console.log(`${TAG} Sección Daily Set no encontrada.`);
-      return [];
+    let cards = [];
+
+    if (section) {
+      const cardSelectors = [
+        'a.group\\/ctrl.cursor-pointer[href]',
+        'a[href][class*="group"]',
+        'a[href][class*="cursor-pointer"]',
+        'mee-rewards-daily-set-item a',
+        'div[class*="c-card"] a',
+        'a[href*="bing.com/search"]',
+        'a[href]'
+      ];
+      for (const sel of cardSelectors) {
+        try {
+          const found = Array.from(section.querySelectorAll(sel));
+          if (found.length > 0) {
+            cards = found;
+            console.log(`${TAG} Selector "${sel}" encontró ${cards.length} enlaces en sección.`);
+            break;
+          }
+        } catch(e) {}
+      }
     }
 
-    const cardSelectors = 'a.group\\/ctrl.cursor-pointer[href]';
-    let cards = section.querySelectorAll(cardSelectors);
-    console.log(`${TAG} Enlaces encontrados en la sección Daily Set: ${cards.length}`);
+    // Fallback: Si no hay sección o tarjetas en sección, buscar globalmente los 3 primeros items diarios
+    if (cards.length === 0) {
+      console.log(`${TAG} Buscando Daily Set globalmente en la página...`);
+      const allLinks = Array.from(document.querySelectorAll('a[href]'));
+      cards = allLinks.filter(a => {
+        const h = a.href || '';
+        if (!/bing\.com|microsoft\.com/i.test(h)) return false;
+        if (/\/(redeem|profile|signin|status|history|earn$|dashboard$)/i.test(h)) return false;
+        const text = (a.innerText || '') + ' ' + (a.parentElement?.innerText || '');
+        return /\b(\+10|\+30|\+50|daily|diario|conjunto|racha|quiz|poll|encuesta)\b/i.test(text);
+      }).slice(0, 3);
+      console.log(`${TAG} Fallback global encontró ${cards.length} enlaces.`);
+    }
 
     const tasks = [];
     const seenUrls = new Set();

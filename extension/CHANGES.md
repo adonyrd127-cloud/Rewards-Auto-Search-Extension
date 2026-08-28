@@ -1,26 +1,32 @@
-# Historial de Cambios — Rewards Auto Search & Claimer v4.2.0
-
-Este documento detalla de forma quirúrgica las mejoras implementadas en la extensión.
+# Historial de Cambios — Rewards Auto Search & Claimer
 
 ---
 
-## MEJORA 1: Búsquedas y Tareas en Segundo Plano (Tabs en Background)
-- Modificación en `openRewardsDashboard()` de `background.js` para abrir el dashboard en segundo plano usando la propiedad `{ active: false }`.
-- Esto previene que se interrumpa al usuario mientras navega en otras pestañas.
+## Versión 4.4.0 (Actual)
 
-## MEJORA 2: Cierre Automático de Pestañas
-- Introducción de `openedTabIds` en el objeto `DEFAULT_SESSION` para registrar de manera persistente las pestañas abiertas por la extensión.
-- Implementación de las funciones auxiliares `trackOpenedTab()`, `removeTrackedTab()`, y `cleanupSessionTabs()` para registrar, remover de la cola, y cerrar todas las pestañas creadas por la extensión al finalizar, detenerse, o encontrar un error.
-- Vinculación del evento `chrome.runtime.onSuspend` para garantizar la limpieza si la extensión se desactiva.
-- Agregado en `popup.html` y `popup.js` un contador en tiempo real de "Tabs abiertos" dentro del panel de control de la sesión activa.
+### 1. Reclamación Automática Universal de Tareas en `rewards.bing.com` (/earn y /dashboard)
+- **Navegación determinista a `/earn`**: `openRewardsDashboard()` ahora navega directamente al centro de tareas `https://rewards.bing.com/earn` y activa la pestaña para asegurar el renderizado completo de Web Components.
+- **Eliminación de la exclusión en `/earn`**: Se eliminaron las restricciones `if (!isEarn)` en `content.js` que impedían escanear Daily Set y Punch Cards en `/earn`.
+- **Control determinista de pestañas con `openTaskTab`**: En lugar de depender de clics indirectos o `sessionStorage`, `claimSingleTask()` solicita la creación de la pestaña directamente a `background.js`, garantizando que `isAutomationTab` sea siempre `true` y que el ciclo de vida de apertura, resolución de quiz y cierre esté 100% coordinado.
+- **Escáner Multiselector Universal**:
+  - `workers/daily-set.js`: Nuevo soporte para encabezados en español e inglés ("racha de conjunto diario", "daily set streak", "conjunto diario") y fallback global para capturar las 3 tareas diarias en cualquier variante del DOM de Microsoft Rewards.
+  - `workers/punch-cards.js`: Escaneo global en todo el DOM si no existe un contenedor `<mee-card-group>` explícito.
+  - `workers/more-activities.js`: Detección ampliada de todas las tarjetas promocionales y de quizzes.
 
-## MEJORA 3: Eliminación del Modo de Búsqueda Móvil
-- Eliminación de todas las referencias de User Agent y debugger de emulación móvil en `background.js` (incluyendo `MOBILE_UA`, debugger attachments/detaches, lógica de secuencia en queue, y contadores de `stats`).
-- Limpieza en la interfaz de usuario (`popup.html` y `popup.js`) eliminando el botón "Móvil" del launcher y la configuración de cantidad de búsquedas móviles.
-- Remoción de la propiedad `mobileSearches` de los ajustes por defecto y lógica de guardado de configuración.
+### 2. Búsquedas de Bing 100% Confiables
+- **Navegación determinista y `waitForTabLoad`**: `runSessionLoop()` navega directamente a la URL de búsqueda, espera que el documento cargue por completo, e inyecta interacciones humanas (`simulateSearchPageInteractions`: scroll en `#b_results`, mouseover en enlaces de resultados).
+- **Modo Pestaña Activa**: Activado por defecto en Ajustes para evitar el estrangulamiento de timers y pérdida de foco de Chromium en pestañas ocultas.
+- **Modo Cooldown de 15 Minutos**: Pausa inteligente de 15 minutos cada 4 búsquedas para cuentas con la restricción de Microsoft Rewards.
 
-## MEJORA 4: Mejoras Visuales / UI-UX
-- **Badge de progreso dinámico**: Se implementó `updateBadge(session)` en `background.js` para actualizar en tiempo real el badge del icono de la extensión con la cantidad de búsquedas restantes en color verde (`#10B981`) y mostrar un check `✓` por 2 segundos al completar.
-- **Notificación nativa al completar**: Se programó una notificación nativa al finalizar toda la cola de búsqueda detallando búsquedas realizadas, puntos estimados obtenidos, y la duración exacta del ciclo, incluyendo un botón interactivo para "Ver Dashboard".
-- **Tema de color según el modo activo**: Implementación de clases de color mediante CSS variables (`--mode-color`) en `popup.css` que cambian el borde de la ventana y el header dinámicamente (`mode-desktop` en azul `#3B82F6`, `mode-edge` en verde esmeralda `#10B981`, `mode-idle` por defecto).
-- **Log de Actividad en tiempo real**: Creación de un panel colapsable "Registro de Actividad" en `popup.html`, `popup.css` y `popup.js`. Muestra las últimas 20 acciones de la automatización en formato monoespaciado con scroll automático hacia el último evento y preserva el estado expandido/colapsado entre sesiones.
+---
+
+## Versión 4.3.0 / 4.3.1
+- Solucionado el envío del formulario de Bing en la página principal (`#sb_form` / `#sb_form_go` / `requestSubmit()` / fallback `window.location.href`).
+- Inyectado el override de Page Visibility API (`visibilityState = 'visible'`, `hidden = false`, `hasFocus = true`).
+- Añadido `startAutoClaimAll` entre `background.js` y `content.js`.
+
+---
+
+## Versión 4.2.0
+- Auditoría exhaustiva de estabilidad (`onStartup`, `chrome.alarms`, mutex de arrays de storage, sanitización HTML contra XSS en `content.js`).
+- Cierre automático de pestañas huérfanas (`openedTabIds`).

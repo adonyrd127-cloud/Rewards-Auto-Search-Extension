@@ -172,12 +172,9 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     console.log(`${TAG} Iniciando escaneo de Punch Cards...`);
 
     const section = _findPunchCardSection();
-    if (!section) {
-      console.log(`${TAG} Sección Punch Cards no encontrada.`);
-      return [];
-    }
+    const root = section || document.body;
 
-    const cards = _findPunchCardElements(section);
+    const cards = _findPunchCardElements(root);
     console.log(`${TAG} Elementos Punch Cards encontrados: ${cards.length}`);
 
     const tasks = [];

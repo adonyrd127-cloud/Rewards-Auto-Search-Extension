@@ -26,7 +26,14 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
       console.log("[RewardsBot] Orden recibida: Ejecutando reclamación automática de tareas...");
       setTimeout(async () => {
         await runFullScan();
-        runClaimAll();
+        const pendingCount = countPendingTasks();
+        console.log(`[RewardsBot] Tareas pendientes encontradas: ${pendingCount}`);
+        if (pendingCount > 0) {
+          runClaimAll();
+        } else if (window.location.pathname.includes('/dashboard')) {
+          console.log("[RewardsBot] No se encontraron tareas en /dashboard. Navegando a /earn...");
+          window.location.href = "https://rewards.bing.com/earn";
+        }
       }, 2000);
       sendResponse({ success: true });
       return true;
@@ -1255,7 +1262,7 @@ function initRewardsPanel() {
       </div>
       <div>
         <span class="rap-header-title">Rewards <span>Auto</span><span class="rap-activity-dot" id="rap-activity-dot"></span></span>
-        <span class="rap-header-version">v4.3.0</span>
+        <span class="rap-header-version">v4.4.0</span>
       </div>
     </div>
     <div id="rap-header-points-container" style="display: none; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.08); padding: 3px 8px; border-radius: 12px; margin-left: auto; margin-right: 10px; border: 1px solid rgba(245, 158, 11, 0.3);">
@@ -1310,7 +1317,7 @@ function initRewardsPanel() {
         </svg>
         <span class="refresh-text">Escanear</span>
       </button>
-      <span>Rewards Auto v4.3.0</span>
+      <span>Rewards Auto v4.4.0</span>
     </div>
   `;
 
@@ -1996,26 +2003,24 @@ async function runFullScan() {
     const isDashboard = window.location.pathname.includes('/dashboard') || window.location.pathname === "/";
     const isEarn = window.location.pathname.includes('/earn');
 
-    // 1. Daily Set
-    if (!isEarn) {
-      try {
-        if (window.RewardsWorkers && window.RewardsWorkers.DailySet) {
-          const tasks = await window.RewardsWorkers.DailySet.scan();
-          panelState.sections.dailySet.tasks = tasks;
-        }
-      } catch (e) { console.log("[RewardsBot] Error escaneando Daily Set:", e); }
-    }
+    // 1. Daily Set (se escanea en todas las páginas de Rewards)
+    try {
+      if (window.RewardsWorkers && window.RewardsWorkers.DailySet) {
+        const tasks = await window.RewardsWorkers.DailySet.scan();
+        panelState.sections.dailySet.tasks = tasks;
+        console.log(`[RewardsBot] Daily Set: ${tasks.length} tareas detectadas.`);
+      }
+    } catch (e) { console.log("[RewardsBot] Error escaneando Daily Set:", e); }
     panelState.sections.dailySet.loading = false;
 
-    // 2. Punch Cards
-    if (!isEarn) {
-      try {
-        if (window.RewardsWorkers && window.RewardsWorkers.PunchCards) {
-          const tasks = await window.RewardsWorkers.PunchCards.scan();
-          panelState.sections.punchCards.tasks = tasks;
-        }
-      } catch (e) { console.log("[RewardsBot] Error escaneando Punch Cards:", e); }
-    }
+    // 2. Punch Cards (se escanea en todas las páginas de Rewards)
+    try {
+      if (window.RewardsWorkers && window.RewardsWorkers.PunchCards) {
+        const tasks = await window.RewardsWorkers.PunchCards.scan();
+        panelState.sections.punchCards.tasks = tasks;
+        console.log(`[RewardsBot] Punch Cards: ${tasks.length} tareas detectadas.`);
+      }
+    } catch (e) { console.log("[RewardsBot] Error escaneando Punch Cards:", e); }
     panelState.sections.punchCards.loading = false;
 
     // 3. More Activities (se escanea en TODAS las páginas: dashboard, /earn, etc.)
@@ -2245,33 +2250,37 @@ async function runClaimAll() {
 // ============================================================
 
 async function claimSingleTask(task) {
-  // Notificar al background que se abrirá una nueva pestaña de tarea para que empiece a trackearla
-  await new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: "prepareForTaskTab" }, () => {
-      resolve();
-    });
-  });
+  console.log(`[RewardsBot] Reclamando tarea: "${task.title}" (URL: ${task.url})`);
 
-  if (task.element) {
-    // Forzar apertura en nueva pestaña
-    task.element.setAttribute("target", "_blank");
-
-    // Usar simulación humana si está disponible
-    if (window.RewardsUtils && window.RewardsUtils.Human) {
-      await window.RewardsUtils.Human.click(task.element);
-    } else {
-      // Fallback: clic simulado con eventos
-      const clickEvent = new MouseEvent("click", {
-        view: window, bubbles: true, cancelable: true, ctrlKey: true
+  let opened = false;
+  if (task.url && typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+    try {
+      const res = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: "openTaskTab", url: task.url }, (response) => {
+          resolve(response);
+        });
       });
-      task.element.dispatchEvent(clickEvent);
-
-      // Fallback nativo
-      setTimeout(() => { try { task.element.click(); } catch (e) {} }, 100);
+      if (res && res.success) {
+        opened = true;
+        console.log(`[RewardsBot] Pestaña de tarea abierta determinísticamente (ID: ${res.tabId})`);
+      }
+    } catch (e) {
+      console.log("[RewardsBot] Error solicitando openTaskTab al background:", e);
     }
-  } else if (task.url) {
-    // Si no hay elemento pero sí URL, abrir directamente
-    window.open(task.url, "_blank");
+  }
+
+  if (!opened) {
+    // Fallback: clic simulado en elemento o window.open
+    if (task.element) {
+      task.element.setAttribute("target", "_blank");
+      if (window.RewardsUtils && window.RewardsUtils.Human) {
+        await window.RewardsUtils.Human.click(task.element);
+      } else {
+        task.element.click();
+      }
+    } else if (task.url) {
+      window.open(task.url, "_blank");
+    }
   }
 }
 

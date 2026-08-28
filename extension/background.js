@@ -360,6 +360,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "openTaskTab") {
+    dashboardTabId = sender.tab?.id;
+    createTabSafe({ url: message.url, active: false }).then(async (newTab) => {
+      if (newTab && newTab.id) {
+        activeTaskTabId = newTab.id;
+        await registerAutomationTab(newTab.id);
+        console.log(`[RewardsBot][background] Task tab opened deterministically: ${newTab.id} for ${message.url}`);
+        sendResponse({ success: true, tabId: newTab.id });
+      } else {
+        sendResponse({ success: false, error: "Could not create task tab" });
+      }
+    }).catch(err => {
+      sendResponse({ success: false, error: err.message });
+    });
+    return true; // async response
+  }
+
   if (message.action === "closeMyTab") {
     const tabId = sender.tab?.id;
     if (tabId) {
@@ -573,19 +590,18 @@ async function openRewardsDashboard(autoClaim = false) {
   let targetTabId = null;
 
   if (tabs.length > 0) {
-    // Recargar la pestaña existente sin robar el foco
     targetTabId = tabs[0].id;
     await registerAutomationTab(targetTabId);
-    await appendActivityLog("🎯 Recargando dashboard de Rewards para reclamar tareas");
-    await chrome.tabs.reload(targetTabId);
+    await appendActivityLog("🎯 Navegando a Microsoft Rewards (Ganar) para reclamar tareas");
+    await chrome.tabs.update(targetTabId, { url: "https://rewards.bing.com/earn", active: true });
   } else {
-    // Abrir nueva pestaña en segundo plano (no roba foco al usuario)
-    const newTab = await createTabSafe({ url: "https://rewards.bing.com/earn", active: false });
+    // Abrir nueva pestaña en Rewards
+    const newTab = await createTabSafe({ url: "https://rewards.bing.com/earn", active: true });
     if (newTab && newTab.id) {
       targetTabId = newTab.id;
       await registerAutomationTab(targetTabId);
       await trackOpenedTab(targetTabId);
-      await appendActivityLog("🎯 Abriendo dashboard de Rewards en segundo plano");
+      await appendActivityLog("🎯 Abriendo Microsoft Rewards (Ganar) para reclamar tareas");
     }
   }
 
@@ -886,109 +902,43 @@ async function runSessionLoop(session) {
       const searchUrl = BING_SEARCH_URL + encodeURIComponent(query) + "&form=QBRE#ua=" + session.mode;
       
       try {
+        // Navegación determinista a la URL de búsqueda y activación de pestaña si está configurado
+        await chrome.tabs.update(session.tabId, {
+          url: searchUrl,
+          active: settings.runSearchesInActiveTab !== false
+        });
+        
+        // Esperar a que la página de resultados cargue completamente
+        await waitForTabLoad(session.tabId, 8000);
+
+        // Inyectar override de visibilidad e interacciones humanas en los resultados
         await chrome.scripting.executeScript({
           target: { tabId: session.tabId },
-          func: (searchQuery, fallbackUrl) => {
-             // OVERRIDE PAGE VISIBILITY API & FOCUS (Garantiza 100% de puntos en búsquedas en segundo plano)
-             try {
-                Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
-                Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
-                Object.defineProperty(document, 'hasFocus', { get: () => true, configurable: true });
-                window.dispatchEvent(new Event('focus'));
-                document.dispatchEvent(new Event('focus'));
-             } catch(e) {}
+          func: () => {
+            try {
+              Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+              Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+              Object.defineProperty(document, 'hasFocus', { get: () => true, configurable: true });
+              window.dispatchEvent(new Event('focus'));
+              document.dispatchEvent(new Event('focus'));
+            } catch(e) {}
 
-             const input = document.querySelector('textarea[name="q"], input[name="q"], #sb_form_q');
-             if (!input) {
-                // Si no hay barra de búsqueda (ej. la página no cargó bien), navegar directo
-                window.location.href = fallbackUrl;
-                return;
-             }
-             
-             // Enfocar y limpiar la barra
-             input.focus();
-             input.value = "";
-             input.dispatchEvent(new Event('input', { bubbles: true }));
-             
-             // Simular escritura letra por letra
-             let i = 0;
-             function typeNext() {
-                if (i < searchQuery.length) {
-                   input.value += searchQuery.charAt(i);
-                   input.dispatchEvent(new Event('input', { bubbles: true }));
-                   i++;
-                   // Retraso humano entre teclas (25 a 75ms)
-                   setTimeout(typeNext, 25 + Math.random() * 50);
-                } else {
-                   // Esperar un poquito antes de presionar enter/buscar
-                   setTimeout(() => {
-                      input.dispatchEvent(new Event('change', { bubbles: true }));
-                      
-                      const form = input.closest('form') || document.querySelector('form#sb_form');
-                      let submitted = false;
-
-                      if (form) {
-                         const btn = form.querySelector('input[type="submit"], button[type="submit"], #sb_form_go, label[for="sb_form_go"], #search_icon');
-                         if (btn) {
-                            try {
-                               btn.click();
-                               submitted = true;
-                            } catch(e) {}
-                         }
-                         if (!submitted && typeof form.requestSubmit === 'function') {
-                            try {
-                               form.requestSubmit();
-                               submitted = true;
-                            } catch(e) {}
-                         }
-                         if (!submitted) {
-                            try {
-                               form.submit();
-                               submitted = true;
-                            } catch(e) {}
-                         }
-                      }
-
-                      // Presionar Enter como fallback adicional
-                      try {
-                         const enterOpts = { bubbles: true, cancelable: true, key: "Enter", code: "Enter", keyCode: 13, which: 13 };
-                         input.dispatchEvent(new KeyboardEvent("keydown", enterOpts));
-                         input.dispatchEvent(new KeyboardEvent("keypress", enterOpts));
-                         input.dispatchEvent(new KeyboardEvent("keyup", enterOpts));
-                      } catch(e) {}
-
-                      // Fallback INFALIBLE: Si después de 600ms la página no ha cambiado de URL, forzar navegación a fallbackUrl
-                      const currentHref = window.location.href;
-                      setTimeout(() => {
-                         if (window.location.href === currentHref) {
-                            window.location.href = fallbackUrl;
-                         }
-                      }, 600);
-                   }, 200 + Math.random() * 200);
-                }
-             }
-             typeNext();
-          },
-          args: [query, searchUrl]
+            // Simular interacción humana en resultados si RewardsUtils está presente
+            if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateSearchPageInteractions) {
+              window.RewardsUtils.Human.simulateSearchPageInteractions().catch(() => {});
+            }
+          }
         });
       } catch (e) {
-        // Fallback si la inyección de script falla (ej. pestaña cerrada o página aún cargando la primera vez)
-        console.log("Scripting falló, navegando directamente...", e);
+        console.log("[RewardsBot] Error en ciclo de búsqueda:", e);
         try {
-          await chrome.tabs.update(session.tabId, { url: searchUrl });
-        } catch (err) {
-          // Tab was closed by user, recreate it
-          console.log("Search tab was closed, recreating...");
-          const newTab = await createTabSafe({ url: searchUrl, active: false });
+          const newTab = await createTabSafe({ url: searchUrl, active: settings.runSearchesInActiveTab !== false });
           if (newTab && newTab.id) {
             session.tabId = newTab.id;
-            if (!session.openedTabIds) session.openedTabIds = [];
-            if (!session.openedTabIds.includes(newTab.id)) session.openedTabIds.push(newTab.id);
-            await registerAutomationTab(newTab.id); // Mark recreated tab as automation-controlled
-            await chrome.storage.local.set({ session });
-            await waitForTabLoad(newTab.id, 10000);
+            await registerAutomationTab(newTab.id);
+            await waitForTabLoad(newTab.id, 8000);
           }
-        }
+        } catch (err) {}
       }
 
       // Increment completed count
