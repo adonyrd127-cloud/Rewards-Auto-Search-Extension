@@ -223,8 +223,12 @@ function observeCaptcha() {
 if (isRewardsPage) {
   console.log("[RewardsBot] Cargado en página de Rewards (" + window.location.pathname + ").");
 
-  const checkAndRunAutoClaim = async () => {
-    initRewardsPanel();
+  const ensurePanelAndAutoClaim = async () => {
+    if (!document.getElementById('rewards-auto-panel')) {
+      if (document.body) {
+        initRewardsPanel();
+      }
+    }
 
     const hasHash = window.location.hash.includes("autoClaim=true");
     const storage = await new Promise(r => chrome.storage.local.get("autoClaimPending", r));
@@ -244,12 +248,24 @@ if (isRewardsPage) {
           console.log("[RewardsBot] No se encontraron tareas en /dashboard. Navegando a /earn...");
           window.location.href = "https://rewards.bing.com/earn#autoClaim=true";
         }
-      }, 2500);
+      }, 1500);
     }
   };
 
-  // Esperar a que los Web Components de Microsoft se rendericen
-  setTimeout(checkAndRunAutoClaim, 2000);
+  // Inicializar inmediatamente cuando el DOM esté listo
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => setTimeout(ensurePanelAndAutoClaim, 800));
+  } else {
+    setTimeout(ensurePanelAndAutoClaim, 800);
+  }
+
+  // Heartbeat cada 3 segundos: asegura que el panel flotante nunca desaparezca tras renders de React/Next.js
+  setInterval(() => {
+    if (!document.getElementById('rewards-auto-panel') && document.body) {
+      console.log("[RewardsBot] Panel flotante no encontrado en DOM. Re-inyectando...");
+      initRewardsPanel();
+    }
+  }, 3000);
 
   // Detectar navegación SPA (Single Page Application)
   let lastUrl = location.href;
@@ -258,7 +274,7 @@ if (isRewardsPage) {
     if (url !== lastUrl) {
       lastUrl = url;
       console.log("[RewardsBot] Navegación SPA detectada. URL cambió a:", url);
-      setTimeout(checkAndRunAutoClaim, 2000);
+      setTimeout(ensurePanelAndAutoClaim, 1000);
     }
   }).observe(document, { subtree: true, childList: true });
 }
@@ -444,25 +460,25 @@ function injectStyles() {
 
     #rewards-auto-panel {
       position: fixed;
-      top: ${panelState.position.y}px;
-      left: ${panelState.position.x}px;
-      width: 340px;
+      top: 80px;
+      right: 20px;
+      width: 360px;
       max-height: 85vh;
       background: ${THEME.bg};
-      backdrop-filter: blur(12px) saturate(1.5);
-      -webkit-backdrop-filter: blur(12px) saturate(1.5);
+      backdrop-filter: blur(16px) saturate(1.8);
+      -webkit-backdrop-filter: blur(16px) saturate(1.8);
       border: 1px solid ${THEME.panelBorder};
-      border-radius: 12px;
+      border-radius: 14px;
       box-shadow: 
-        0 0 0 1px rgba(255,255,255,0.05),
+        0 0 0 1px rgba(255,255,255,0.08),
         0 4px 6px -1px rgba(0,0,0,0.3),
-        0 20px 40px -10px rgba(0,0,0,0.5),
-        0 0 80px -20px rgba(16, 185, 129, 0.08);
-      z-index: 999999;
+        0 20px 40px -10px rgba(0,0,0,0.6),
+        0 0 80px -20px rgba(16, 185, 129, 0.15);
+      z-index: 2147483647 !important;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+      transition: opacity 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
       animation: panelSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
