@@ -96,8 +96,10 @@ function isCardCompleted(task) {
     return false;
   }
   
-  const fullText = el.innerText || '';
-  const hasCheckmark = el.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"]') !== null || 
+  const parentContainer = el.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || el.parentElement || el;
+  const fullText = (el.innerText || '') + ' ' + (parentContainer.innerText || '');
+  const hasCheckmark = 
+    parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check') !== null || 
     /\b(completad[oa]s?|listo|hecho|done|completed)\b/i.test(fullText) ||
     /[✓✔]/.test(fullText);
   return hasCheckmark;

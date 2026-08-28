@@ -245,14 +245,14 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    */
   function _parseCard(card, seenUrls) {
     try {
-      const url = card.href || card.getAttribute('href') || '';
+      const url = card.href || card.getAttribute('href') || card.querySelector('a[href]')?.href || '';
       if (!url || url.startsWith('javascript:')) return null;
       if (_shouldIgnoreUrl(url)) return null;
 
-      const fullText = card.innerText || card.textContent || '';
+      const parentContainer = card.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || card.parentElement || card;
+      const fullText = (card.innerText || card.textContent || '') + ' ' + (parentContainer.innerText || parentContainer.textContent || '');
       
       let points = '';
-      // Buscar el badge de puntos con múltiples selectores (Tailwind classes de Microsoft)
       const pointsSelectors = [
         '.text-statusInformativeTintFg',
         '.text-metadata',
@@ -262,7 +262,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         '[class*="badge"]'
       ];
       for (const sel of pointsSelectors) {
-        const pointsEl = card.querySelector(sel);
+        const pointsEl = parentContainer.querySelector(sel);
         if (pointsEl) {
           const match = pointsEl.innerText.match(/\+?\s*(\d+)/);
           if (match) {
@@ -276,12 +276,18 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
 
       const hasCheckmark = 
-        card.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"]') !== null || 
+        parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check') !== null || 
         /\b(completad[oa]s?|listo|hecho|done|completed)\b/i.test(fullText) ||
         /[✓✔]/.test(fullText);
 
-      // Si no tiene puntos detectables Y no tiene marca de completado, no es una tarjeta de recompensa válida
-      if (!points && !hasCheckmark) return null;
+      // Si no tiene puntos detectables Y no tiene marca de completado, comprobar si es enlace de tarea válido
+      if (!points && !hasCheckmark) {
+        if (/bing\.com|rewards|quiz|poll/i.test(url)) {
+          points = '+5';
+        } else {
+          return null;
+        }
+      }
 
       const urlKey = url;
       if (seenUrls.has(urlKey)) return null;
@@ -291,7 +297,6 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       const type = _detectType(url, card);
 
       let title = 'Actividad Promocional';
-      // Buscar el título con múltiples selectores
       const titleSelectors = [
         '.text-globalBody2Strong',
         '.text-globalBody1Strong',
@@ -302,26 +307,25 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         'h3', 'h4', 'strong'
       ];
       for (const sel of titleSelectors) {
-        const titleEl = card.querySelector(sel);
+        const titleEl = parentContainer.querySelector(sel);
         if (titleEl && titleEl.innerText && titleEl.innerText.trim().length > 2) {
           title = titleEl.innerText.trim();
           break;
         }
       }
-      if (title === 'Actividad Promocional' && card.getAttribute('aria-label')) {
-        title = card.getAttribute('aria-label');
+      if (title === 'Actividad Promocional' && parentContainer.getAttribute('aria-label')) {
+        title = parentContainer.getAttribute('aria-label');
       }
-      // Último recurso: primer línea de texto
       if (title === 'Actividad Promocional' && fullText) {
-        const firstLine = fullText.split('\n')[0].trim();
-        if (firstLine.length > 2 && firstLine.length < 80) {
-          title = firstLine;
+        const lines = fullText.split('\n').map(l => l.trim()).filter(l => l.length > 2 && !/^\+?\d+$/.test(l));
+        if (lines.length > 0) {
+          title = lines[0];
         }
       }
 
       return {
         title: title,
-        points: points || '+10',
+        points: points || '+5',
         type: type,
         completed: completed,
         element: card,

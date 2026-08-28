@@ -199,43 +199,54 @@ window.RewardsWorkers = window.RewardsWorkers || {};
 
     for (const card of cards) {
       try {
-        const url = card.href || '';
+        const url = card.href || card.getAttribute('href') || card.querySelector('a[href]')?.href || '';
         if (!url || url.startsWith('javascript:')) continue;
         if (!/bing\.com|microsoft\.com/i.test(url)) continue;
         if (/\/(redeem|profile|signin|status|history|earn$|dashboard$)/i.test(url)) continue;
 
-        const fullText = card.innerText || '';
+        const parentContainer = card.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || card.parentElement || card;
+        const fullText = (card.innerText || '') + ' ' + (parentContainer.innerText || '');
         
         let points = '';
-        const pointsEl = card.querySelector('.text-statusInformativeTintFg, .text-metadata, [class*="statusInformative"]');
+        const pointsEl = parentContainer.querySelector('.text-statusInformativeTintFg, .text-metadata, [class*="statusInformative"], [class*="points"], [class*="badge"]');
         if (pointsEl) {
           const match = pointsEl.innerText.match(/\+?\s*(\d+)/);
           if (match) points = '+' + match[1];
-        } else {
+        }
+        if (!points) {
           points = _extractPoints(fullText);
         }
 
-        const hasCheckmark = card.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"]') !== null || 
+        const hasCheckmark = 
+          parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check') !== null || 
           /\b(completad[oa]s?|listo|hecho|done|completed)\b/i.test(fullText) ||
           /[✓✔]/.test(fullText);
 
-        // Si no tiene puntos detectables Y no tiene marca de completado, no es una tarjeta de recompensa válida
-        if (!points && !hasCheckmark) continue;
+        // Si no tiene puntos detectables Y no tiene marca de completado, verificar si es tarea válida
+        if (!points && !hasCheckmark) {
+          if (/quiz|poll|supersonic|search|bing/i.test(url)) {
+            points = '+10';
+          } else {
+            continue;
+          }
+        }
 
         const urlKey = url;
         if (seenUrls.has(urlKey)) continue;
         seenUrls.add(urlKey);
 
         const completed = hasCheckmark;
-
         const type = _detectType(url, card);
 
-        let title = "Tarea de Rewards";
-        const titleEl = card.querySelector('.text-globalBody2Strong, .text-globalBody1Strong, [class*="Body2Strong"]');
-        if (titleEl) {
+        let title = "Tarea del Conjunto Diario";
+        const titleEl = parentContainer.querySelector('.text-globalBody2Strong, .text-globalBody1Strong, [class*="Body2Strong"], [class*="Body1Strong"], h3, h4, strong, [class*="title"]');
+        if (titleEl && titleEl.innerText && titleEl.innerText.trim().length > 2) {
           title = titleEl.innerText.trim();
-        } else if (card.getAttribute('aria-label')) {
-          title = card.getAttribute('aria-label');
+        } else if (parentContainer.getAttribute('aria-label')) {
+          title = parentContainer.getAttribute('aria-label');
+        } else if (fullText) {
+          const lines = fullText.split('\n').map(l => l.trim()).filter(l => l.length > 2 && !/^\+?\d+$/.test(l));
+          if (lines.length > 0) title = lines[0];
         }
 
         tasks.push({
@@ -248,7 +259,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         });
 
       } catch (err) {
-        console.error(`${TAG} Error parseando tarjeta React:`, err);
+        console.error(`${TAG} Error parseando tarjeta:`, err);
       }
     }
 
