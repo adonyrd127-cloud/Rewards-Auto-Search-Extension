@@ -253,26 +253,42 @@ window.RewardsUtils.DOM = (function () {
   function hasCompletionMark(node) {
     if (!node) return false;
 
-    // ── 1. Buscar SVGs con datos de path de checkmark ──
+    // ── 1. Buscar SVGs con datos de path de checkmark o aria-labels ──
     const svgs = deepQueryAll(node, ['svg', 'svg path']);
     for (const svg of svgs) {
-      // Revisar el atributo 'd' de los <path> dentro del SVG
       const paths = svg.tagName === 'path' ? [svg] : svg.querySelectorAll('path');
       for (const path of paths) {
         const d = path.getAttribute('d') || '';
-        if (d.includes('16.17') || d.toLowerCase().includes('checkmark')) {
+        if (d.includes('16.17') || d.toLowerCase().includes('checkmark') || d.includes('M9 16.2') || d.includes('M9 16.17')) {
           return true;
         }
       }
-      // También revisar data-icon o aria-label del propio SVG
-      const label = (svg.getAttribute('aria-label') || '').toLowerCase();
-      if (label.includes('checkmark') || label.includes('complete')) {
+      const label = (svg.getAttribute('aria-label') || svg.getAttribute('data-icon') || '').toLowerCase();
+      if (label.includes('checkmark') || label.includes('complete') || label.includes('completad') || label.includes('done') || label.includes('success')) {
         return true;
       }
     }
 
-    // ── 2. Buscar clases CSS indicadoras de completitud ──
-    const completionClasses = ['checkmark', 'complete', 'done', 'completed'];
+    // ── 2. Buscar clases CSS indicadoras de completitud (incluyendo Tailwind moderno) ──
+    const completionSelectors = [
+      '.text-statusPositiveTintFg',
+      '[class*="statusPositive"]',
+      '[class*="StatusPositive"]',
+      '.c-indicator-check',
+      '[class*="checkmark"]',
+      '[class*="complete"]',
+      '[class*="done"]',
+      '[class*="success"]',
+      '[class*="claimed"]'
+    ];
+    for (const sel of completionSelectors) {
+      try {
+        if (node.querySelector && node.querySelector(sel)) return true;
+        if (node.classList && node.matches && node.matches(sel)) return true;
+      } catch (e) {}
+    }
+
+    const completionClasses = ['checkmark', 'complete', 'done', 'completed', 'claimed', 'success', 'c-indicator-check'];
     const allElements = deepQueryAll(node, ['*']);
     for (const el of allElements) {
       if (el.classList) {
@@ -281,31 +297,34 @@ window.RewardsUtils.DOM = (function () {
             return true;
           }
         }
-        // También revisar si alguna clase contiene la palabra (ej: 'is-complete')
         for (const cls of el.classList) {
           const lower = cls.toLowerCase();
           if (
             lower.includes('complete') ||
             lower.includes('checkmark') ||
-            lower.includes('done')
+            lower.includes('done') ||
+            lower.includes('claimed') ||
+            lower.includes('statuspositive')
           ) {
             return true;
           }
         }
       }
-    }
-
-    // ── 3. Buscar texto indicador de completitud ──
-    const deepText = getDeepText(node).toLowerCase();
-    const completionTexts = ['completado', 'completada', 'listo', 'hecho'];
-    for (const text of completionTexts) {
-      if (deepText.includes(text)) {
+      // Verificar aria-label en elementos internos
+      const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+      if (aria.includes('completad') || aria.includes('completed') || aria.includes('done') || aria.includes('claimed')) {
         return true;
       }
     }
 
+    // ── 3. Buscar texto indicador de completitud ──
+    const deepText = getDeepText(node).toLowerCase();
+    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(deepText)) {
+      return true;
+    }
+
     // ── 4. Buscar símbolos de check Unicode ──
-    if (deepText.includes('✓') || deepText.includes('✔')) {
+    if (/[✓✔✅]/.test(deepText)) {
       return true;
     }
 

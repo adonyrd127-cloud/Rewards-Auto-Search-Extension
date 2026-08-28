@@ -84,24 +84,69 @@ function waitForTaskTabClose(timeoutMs = 60000) {
 }
 
 function isCardCompleted(task) {
+  // v4.5: Re-escaneo robusto del DOM en lugar de confiar en elemento guardado
   let el = task.element;
+  
+  // Si el elemento original ya no está en el DOM (React re-renderizó), buscar de nuevo
   if (!el || !document.contains(el)) {
+    console.log(`[RewardsBot] Elemento original no encontrado en DOM. Re-escaneando para: ${task.title}`);
+    
     if (task.url) {
-      const escapedUrl = task.url.replace(/["\\]/g, '\\$&');
-      el = document.querySelector(`a[href="${escapedUrl}"]`);
+      try {
+        const urlObj = new URL(task.url);
+        const basePath = urlObj.pathname;
+        
+        // Estrategia 1: Buscar por href exacto
+        const escapedUrl = task.url.replace(/["\\]/g, '\\$&');
+        el = document.querySelector(`a[href="${escapedUrl}"]`);
+        
+        // Estrategia 2: Buscar por URL parcial (sin query params)
+        if (!el && basePath && basePath.length > 2) {
+          el = document.querySelector(`a[href*="${basePath}"]`);
+        }
+        
+        // Estrategia 3: Buscar por título y puntos en todo el DOM
+        if (!el) {
+          const allLinks = document.querySelectorAll('a[href]');
+          for (const link of allLinks) {
+            const parent = link.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || link.parentElement;
+            if (!parent) continue;
+            const text = (link.innerText || '') + ' ' + (parent.innerText || '');
+            const hasTitle = task.title && text.toLowerCase().includes(task.title.toLowerCase().substring(0, 15));
+            const hasPoints = task.points ? text.includes(task.points.replace('+', '')) : true;
+            if (hasTitle && hasPoints) {
+              el = link;
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        console.log(`[RewardsBot] Error re-escaneando elemento:`, e);
+      }
     }
   }
+  
   if (!el) {
     console.log(`[RewardsBot] Card element not found for: ${task.title}`);
     return false;
   }
   
+  // v4.5: Usar el utilitario robusto de dom-utils
+  if (window.RewardsUtils && window.RewardsUtils.DOM && window.RewardsUtils.DOM.hasCompletionMark) {
+    if (window.RewardsUtils.DOM.hasCompletionMark(el)) {
+      return true;
+    }
+  }
+  
+  // Fallback: verificación manual con múltiples patrones
   const parentContainer = el.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || el.parentElement || el;
   const fullText = (el.innerText || '') + ' ' + (parentContainer.innerText || '');
+  
   const hasCheckmark = 
-    parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check') !== null || 
-    /\b(completad[oa]s?|listo|hecho|done|completed)\b/i.test(fullText) ||
-    /[✓✔]/.test(fullText);
+    parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check, [class*="checkmark"], [class*="complete"], [class*="done"], [class*="success"], [class*="claimed"]') !== null || 
+    /\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText) ||
+    /[✓✔✅]/.test(fullText);
+    
   return hasCheckmark;
 }
 
@@ -1306,7 +1351,7 @@ function initRewardsPanel() {
       </div>
       <div>
         <span class="rap-header-title">Rewards <span>Auto</span><span class="rap-activity-dot" id="rap-activity-dot"></span></span>
-        <span class="rap-header-version">v4.4.4</span>
+        <span class="rap-header-version">v4.5.0</span>
       </div>
     </div>
     <div id="rap-header-points-container" style="display: none; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.08); padding: 3px 8px; border-radius: 12px; margin-left: auto; margin-right: 10px; border: 1px solid rgba(245, 158, 11, 0.3);">
@@ -1361,7 +1406,7 @@ function initRewardsPanel() {
         </svg>
         <span class="refresh-text">Escanear</span>
       </button>
-      <span>Rewards Auto v4.4.4</span>
+      <span>Rewards Auto v4.5.0</span>
     </div>
   `;
 
@@ -2109,32 +2154,50 @@ async function claimTask(sectionKey, taskIndex) {
   const task = panelState.sections[sectionKey].tasks[taskIndex];
   if (!task || task.completed || task.processing) return;
 
-  panelState.isProcessing = true; // Prevent scan from overwriting task arrays
+  panelState.isProcessing = true;
   task.processing = true;
   renderSections();
   updateStatus(`Abriendo pestaña: ${task.title}...`, 'info');
 
   try {
     await claimSingleTask(task);
-    
-    // Esperar a que se resuelva secuencialmente
     await waitForTaskTabClose(65000);
     
-    await new Promise(r => setTimeout(r, 2000));
+    // v4.5: Esperar 3 segundos para que React re-renderice el dashboard
+    await new Promise(r => setTimeout(r, 3000));
     
-    const completed = isCardCompleted(task);
-    if (completed) {
+    // v4.5: Re-escanear el DOM completamente antes de verificar
+    console.log(`[RewardsBot] Re-escaneando dashboard para verificar: ${task.title}`);
+    panelState.isProcessing = false;
+    await runFullScan();
+    
+    // Buscar la tarea en el estado actualizado
+    const updatedSection = panelState.sections[sectionKey];
+    const updatedTask = updatedSection && updatedSection.tasks ? updatedSection.tasks.find(t => 
+      t.title === task.title || 
+      (task.url && t.url && new URL(t.url).pathname === new URL(task.url).pathname)
+    ) : null;
+    
+    if (updatedTask && updatedTask.completed) {
       task.completed = true;
       showToast('Tarea completada', `"${task.title}" — completada con éxito`, 'success');
     } else {
-      showToast('Tarea no completada', `El dashboard no registró la tarea. Reinténtalo.`, 'warning');
+      // Verificar una vez más con isCardCompleted
+      const completed = isCardCompleted(task);
+      if (completed) {
+        task.completed = true;
+        showToast('Tarea completada', `"${task.title}" — completada con éxito`, 'success');
+      } else {
+        showToast('Tarea no completada', `El dashboard no registró la tarea. Puede que necesites más tiempo o la tarea requiere interacción manual.`, 'warning');
+      }
     }
   } catch (err) {
     showToast('Error', `No se pudo procesar: ${err.message}`, 'error');
   } finally {
     task.processing = false;
-    panelState.isProcessing = false; // Allow scans again
-    runFullScan();
+    panelState.isProcessing = false;
+    renderSections();
+    updateStatusBar();
   }
 }
 
@@ -2211,9 +2274,24 @@ async function runClaimAll() {
     try {
       await claimSingleTask(task);
       await waitForTaskTabClose(65000);
+      
+      // v4.5: Re-escanear el DOM antes de verificar completado
       await new Promise(r => setTimeout(r, 2000));
-
-      const isCompleted = isCardCompleted(task);
+      panelState.isProcessing = false;
+      await runFullScan();
+      panelState.isProcessing = true;
+      
+      const updatedSection = panelState.sections[task.sectionKey];
+      const updatedTask = updatedSection && updatedSection.tasks ? updatedSection.tasks.find(t => 
+        t.title === task.title || 
+        (task.url && t.url && new URL(t.url).pathname === new URL(task.url).pathname)
+      ) : null;
+      
+      let isCompleted = updatedTask && updatedTask.completed;
+      if (!isCompleted) {
+        isCompleted = isCardCompleted(task);
+      }
+      
       console.log(`[RewardsBot] Verificación para "${task.title}": ${isCompleted ? "COMPLETADA" : "NO COMPLETADA"}`);
 
       if (isCompleted) {

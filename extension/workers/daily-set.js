@@ -218,9 +218,10 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         }
 
         const hasCheckmark = 
-          parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check') !== null || 
-          /\b(completad[oa]s?|listo|hecho|done|completed)\b/i.test(fullText) ||
-          /[✓✔]/.test(fullText);
+          (DOM && DOM.hasCompletionMark && (DOM.hasCompletionMark(card) || DOM.hasCompletionMark(parentContainer))) ||
+          parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check, [class*="checkmark"], [class*="complete"], [class*="done"], [class*="success"], [class*="claimed"]') !== null || 
+          /\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText) ||
+          /[✓✔✅]/.test(fullText);
 
         // Si no tiene puntos detectables Y no tiene marca de completado, verificar si es tarea válida
         if (!points && !hasCheckmark) {

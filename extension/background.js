@@ -905,8 +905,8 @@ async function runSessionLoop(session) {
       const searchUrl = BING_SEARCH_URL + encodeURIComponent(query) + "&form=QBRE#ua=" + session.mode;
       
       try {
-        // Navegación determinista a la URL de búsqueda (solo activa la pestaña si el usuario lo configuró explícitamente)
-        const updateParams = { url: searchUrl };
+        // Navegación determinista a la URL de búsqueda (active: false por defecto para no robar foco jamás)
+        const updateParams = { url: searchUrl, active: false };
         if (settings.runSearchesInActiveTab === true) {
           updateParams.active = true;
         }

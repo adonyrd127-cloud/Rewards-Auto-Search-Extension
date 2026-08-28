@@ -126,7 +126,11 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       'mee-rewards-punch-card-item',
       'mee-card-group[data-bi-area="PunchCards"] mee-card',
       'mee-card[data-bi-area="PunchCards"]',
-      '.punch-card-item'
+      '.punch-card-item',
+      'mee-card',
+      'div[class*="punchCard"]',
+      'div[class*="punch-card"]',
+      'div[class*="card"]'
     ].join(', ');
 
     let cards = DOM.deepQueryAll(root, cardSelectors);
@@ -198,7 +202,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         seenUrls.add(url);
 
         const points = _extractPoints(text) || '+100';
-        const completed = progress.current === progress.total;
+        const completed = progress.current === progress.total || (DOM && DOM.hasCompletionMark && DOM.hasCompletionMark(card));
 
         // Intentar extraer el título
         let title = "Tarjeta perforada";

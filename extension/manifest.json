@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rewards Auto Search & Claimer",
-  "version": "4.4.4",
+  "version": "4.5.0",
   "description": "Automatiza búsquedas y reclama puntos en Microsoft Rewards. Soporta Member, Silver y Gold.",
   "permissions": [
     "storage",

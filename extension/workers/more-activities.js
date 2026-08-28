@@ -276,9 +276,10 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
 
       const hasCheckmark = 
-        parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check') !== null || 
-        /\b(completad[oa]s?|listo|hecho|done|completed)\b/i.test(fullText) ||
-        /[✓✔]/.test(fullText);
+        (DOM && DOM.hasCompletionMark && (DOM.hasCompletionMark(card) || DOM.hasCompletionMark(parentContainer))) ||
+        parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check, [class*="checkmark"], [class*="complete"], [class*="done"], [class*="success"], [class*="claimed"]') !== null || 
+        /\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText) ||
+        /[✓✔✅]/.test(fullText);
 
       // Si no tiene puntos detectables Y no tiene marca de completado, comprobar si es enlace de tarea válido
       if (!points && !hasCheckmark) {
@@ -349,13 +350,13 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       document.documentElement.scrollHeight
     );
     
-    for (let y = 0; y < docHeight; y += 500) {
+    for (let y = 0; y < docHeight; y += 400) {
       window.scrollTo(0, y);
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 120));
     }
     
-    // Esperar un momento para que React/Angular rendericen
-    await new Promise(r => setTimeout(r, 500));
+    // Esperar 1.5s para que React/Next.js rendericen el contenido lazy
+    await new Promise(r => setTimeout(r, 1500));
     
     // Restaurar posición de scroll
     window.scrollTo(0, originalScroll);
