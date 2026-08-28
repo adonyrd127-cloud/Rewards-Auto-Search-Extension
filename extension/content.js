@@ -219,9 +219,35 @@ function observeCaptcha() {
 
 // --- REWARDS DASHBOARD AUTOMATION ---
 if (isRewardsPage) {
-  console.log("[RewardsBot] Cargado en página de Rewards.");
+  console.log("[RewardsBot] Cargado en página de Rewards (" + window.location.pathname + ").");
+
+  const checkAndRunAutoClaim = async () => {
+    initRewardsPanel();
+
+    const hasHash = window.location.hash.includes("autoClaim=true");
+    const storage = await new Promise(r => chrome.storage.local.get("autoClaimPending", r));
+    const autoClaimPending = storage && storage.autoClaimPending;
+
+    if (hasHash || autoClaimPending) {
+      console.log("[RewardsBot] 🚀 Auto-claim activado (hash o storage). Iniciando escaneo y reclamación...");
+      await chrome.storage.local.set({ autoClaimPending: false });
+
+      setTimeout(async () => {
+        await runFullScan();
+        const pendingCount = countPendingTasks();
+        console.log(`[RewardsBot] Tareas pendientes detectadas: ${pendingCount}`);
+        if (pendingCount > 0) {
+          runClaimAll();
+        } else if (window.location.pathname.includes('/dashboard')) {
+          console.log("[RewardsBot] No se encontraron tareas en /dashboard. Navegando a /earn...");
+          window.location.href = "https://rewards.bing.com/earn#autoClaim=true";
+        }
+      }, 2500);
+    }
+  };
+
   // Esperar a que los Web Components de Microsoft se rendericen
-  setTimeout(() => initRewardsPanel(), 2500);
+  setTimeout(checkAndRunAutoClaim, 2000);
 
   // Detectar navegación SPA (Single Page Application)
   let lastUrl = location.href;
@@ -230,7 +256,7 @@ if (isRewardsPage) {
     if (url !== lastUrl) {
       lastUrl = url;
       console.log("[RewardsBot] Navegación SPA detectada. URL cambió a:", url);
-      setTimeout(() => initRewardsPanel(), 2000);
+      setTimeout(checkAndRunAutoClaim, 2000);
     }
   }).observe(document, { subtree: true, childList: true });
 }
@@ -282,9 +308,9 @@ if (isSearchPage) {
       const session = data.session || {};
       const isRunning = session.status === "running";
 
-      console.log(`[RewardsBot] Bing Search Page. Estado sesión: ${session.status}, isRewardsTaskTab: ${isRewardsTask}`);
+      console.log(`[RewardsBot] Bing Search Page. Estado sesión: ${session.status}, isAutomationTab: ${isAutomationTab}, isRewardsTaskTab: ${isRewardsTask}`);
 
-      if (isRunning || isRewardsTask) {
+      if (isRunning || isRewardsTask || isAutomationTab) {
         console.log("[RewardsBot] Condición cumplida (sesión activa o tarea de Rewards). Iniciando interacción humana y auto-solver...");
         
         // Simular interacciones humanas completas (scroll en resultados, mouse moves y hovers)
@@ -294,8 +320,8 @@ if (isSearchPage) {
 
         setTimeout(solveActiveTasks, 2500);
 
-        // Si es una tarea de rewards, iniciar el monitoreo para cerrar la pestaña cuando termine
-        if (isRewardsTask) {
+        // Si es una pestaña de tarea de rewards (no sesión de búsqueda), monitorear ciclo de vida y cerrar
+        if (isRewardsTask || (isAutomationTab && !isRunning)) {
           console.log("[RewardsBot] Tarea de Rewards detectada en pestaña. Iniciando monitoreo de ciclo de vida...");
           setTimeout(() => {
             if (isQuizOrPollPresent()) {

@@ -585,7 +585,11 @@ function waitForTabLoad(tabId, timeoutMs = 10000) {
 
 // Abrir el dashboard de Rewards para que los content scripts trabajen
 async function openRewardsDashboard(autoClaim = false) {
-  // Verificar si ya hay una pestaña de rewards abierta
+  if (autoClaim) {
+    await chrome.storage.local.set({ autoClaimPending: true });
+  }
+
+  const targetUrl = autoClaim ? "https://rewards.bing.com/earn#autoClaim=true" : "https://rewards.bing.com/earn";
   const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
   let targetTabId = null;
 
@@ -593,10 +597,10 @@ async function openRewardsDashboard(autoClaim = false) {
     targetTabId = tabs[0].id;
     await registerAutomationTab(targetTabId);
     await appendActivityLog("🎯 Navegando a Microsoft Rewards (Ganar) para reclamar tareas");
-    await chrome.tabs.update(targetTabId, { url: "https://rewards.bing.com/earn", active: true });
+    await chrome.tabs.update(targetTabId, { url: targetUrl, active: true });
   } else {
     // Abrir nueva pestaña en Rewards
-    const newTab = await createTabSafe({ url: "https://rewards.bing.com/earn", active: true });
+    const newTab = await createTabSafe({ url: targetUrl, active: true });
     if (newTab && newTab.id) {
       targetTabId = newTab.id;
       await registerAutomationTab(targetTabId);
@@ -606,10 +610,9 @@ async function openRewardsDashboard(autoClaim = false) {
   }
 
   if (targetTabId && autoClaim) {
-    await waitForTabLoad(targetTabId, 10000);
     setTimeout(() => {
       chrome.tabs.sendMessage(targetTabId, { action: "startAutoClaimAll" }).catch(() => {});
-    }, 2000);
+    }, 3000);
   }
 }
 
