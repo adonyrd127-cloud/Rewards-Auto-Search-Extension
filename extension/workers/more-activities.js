@@ -237,6 +237,18 @@ window.RewardsWorkers = window.RewardsWorkers || {};
   // API pública
   // ---------------------------------------------------------------------------
 
+  function _findCardContainer(card) {
+    if (!card) return card;
+    let current = card;
+    if (current.tagName === 'A' || current.getAttribute('role') === 'button' || (current.className && typeof current.className === 'string' && current.className.includes('group'))) {
+      if (current.parentElement && current.parentElement !== document.body) {
+        current = current.parentElement;
+      }
+    }
+    const container = current.closest('div[class*="card" i], div[class*="item" i], li, article, mee-card, [data-bi-area]') || current;
+    return container;
+  }
+
   /**
    * Parsea una tarjeta/enlace y extrae su información.
    * @param {Element} card — Elemento <a> o tarjeta clickable
@@ -249,8 +261,8 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       if (!url || url.startsWith('javascript:')) return null;
       if (_shouldIgnoreUrl(url)) return null;
 
-      const parentContainer = card.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || card.parentElement || card;
-      const fullText = (card.innerText || card.textContent || '') + ' ' + (parentContainer.innerText || parentContainer.textContent || '');
+      const parentContainer = _findCardContainer(card);
+      const fullText = (card.innerText || card.textContent || '') + ' ' + (parentContainer ? (parentContainer.innerText || parentContainer.textContent || '') : '');
       
       // Ignorar tareas bloqueadas exclusivas de la app móvil
       if (/\b(bloquead[oa]s?|locked|solo en la aplicación|app only)\b/i.test(fullText)) {

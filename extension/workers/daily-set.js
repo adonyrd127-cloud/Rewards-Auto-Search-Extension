@@ -153,6 +153,22 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     return '';
   }
 
+  /**
+   * Encuentra el verdadero contenedor de la tarjeta ascendiendo desde enlaces o botones
+   * para asegurar que incluya los badges de puntos y los textos de estado (ej: "Completadas").
+   */
+  function _findCardContainer(card) {
+    if (!card) return card;
+    let current = card;
+    if (current.tagName === 'A' || current.getAttribute('role') === 'button' || (current.className && typeof current.className === 'string' && current.className.includes('group'))) {
+      if (current.parentElement && current.parentElement !== document.body) {
+        current = current.parentElement;
+      }
+    }
+    const container = current.closest('div[class*="card" i], div[class*="item" i], li, article, mee-card, [data-bi-area]') || current;
+    return container;
+  }
+
   // ---------------------------------------------------------------------------
   // API pública
   // ---------------------------------------------------------------------------
@@ -205,7 +221,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         // Excluir elementos en nav, header, footer
         if (a.closest('nav, header, footer, [role="navigation"]')) return false;
 
-        const parentContainer = a.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || a.parentElement || a;
+        const parentContainer = _findCardContainer(a);
         const text = (a.innerText || '') + ' ' + (parentContainer.innerText || '');
         
         // Ignorar si es de la sección rachas o está bloqueada
@@ -227,7 +243,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         if (!/bing\.com|microsoft\.com/i.test(url)) continue;
         if (/\/(redeem|profile|signin|status|history|earn$|dashboard$)/i.test(url)) continue;
 
-        const parentContainer = card.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || card.parentElement || card;
+        const parentContainer = _findCardContainer(card);
         const fullText = (card.innerText || '') + ' ' + (parentContainer.innerText || '');
         
         let points = '';

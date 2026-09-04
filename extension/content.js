@@ -515,7 +515,7 @@ let panelState = {
   isOpen: true,
   isMinimized: false,
   isProcessing: false, // Guard: prevents runFullScan from overwriting tasks during active claim
-  position: { x: window.innerWidth - 380, y: 80 },
+  position: { x: 24, y: 80 },
   sections: {
     dailySet: { loading: true, tasks: [], expanded: true },
     moreActivities: { loading: true, tasks: [], expanded: true },
@@ -545,7 +545,8 @@ function injectStyles() {
     #rewards-auto-panel {
       position: fixed;
       top: 80px;
-      right: 20px;
+      left: 24px;
+      right: auto;
       width: 360px;
       max-height: 85vh;
       background: ${THEME.bg};
@@ -1530,21 +1531,30 @@ function setupPanelEvents(panel, header) {
     panel.classList.remove('dragging');
   });
 
-  panel.querySelector('.rap-btn-icon.minimize').addEventListener('click', () => {
-    panelState.isMinimized = !panelState.isMinimized;
-    panel.classList.toggle('minimized', panelState.isMinimized);
-  });
+  const minBtn = panel.querySelector('.rap-btn-icon.minimize');
+  if (minBtn) {
+    minBtn.addEventListener('click', () => {
+      panelState.isMinimized = !panelState.isMinimized;
+      panel.classList.toggle('minimized', panelState.isMinimized);
+    });
+  }
 
-  panel.querySelector('.rap-btn-icon.close').addEventListener('click', () => {
-    panel.style.opacity = '0';
-    panel.style.transform = 'scale(0.9)';
-    setTimeout(() => {
-      panel.remove();
-      panelState.isOpen = false;
-    }, 300);
-  });
+  const closeBtn = panel.querySelector('.rap-btn-icon.close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      panel.style.opacity = '0';
+      panel.style.transform = 'scale(0.9)';
+      setTimeout(() => {
+        panel.remove();
+        panelState.isOpen = false;
+      }, 300);
+    });
+  }
 
-  panel.querySelector('#rap-claim-all').addEventListener('click', runClaimAll);
+  const claimAllBtn = panel.querySelector('#rap-claim-all');
+  if (claimAllBtn) {
+    claimAllBtn.addEventListener('click', runClaimAll);
+  }
 }
 
 // ─── Mostrar Notificación Toast ───
