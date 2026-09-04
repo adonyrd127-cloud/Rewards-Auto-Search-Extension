@@ -154,6 +154,63 @@ window.RewardsWorkers = window.RewardsWorkers || {};
   }
 
   /**
+   * Lee el contador oficial de "Tu actividad" -> "Conjunto diario: Actividad: X/3"
+   * @returns {{ completed: number, total: number } | null}
+   */
+  function _getDailyActivityCounter() {
+    try {
+      const allText = document.body ? (document.body.innerText || document.body.textContent || '') : '';
+      const match = allText.match(/(?:conjunto diario|daily set)[\s\S]{0,100}?(?:actividad|activity)?:\s*(\d)\s*\/\s*(\d)/i)
+                 || allText.match(/(?:actividad|activity)?:\s*(\d)\s*\/\s*(\d)[\s\S]{0,100}?(?:conjunto diario|daily set)/i);
+      if (match) {
+        return { completed: parseInt(match[1], 10), total: parseInt(match[2], 10) };
+      }
+    } catch(e) {}
+    return null;
+  }
+
+  /**
+   * Detecta si una tarjeta individual está completada usando múltiples heurísticas.
+   */
+  function _isCardCompleted(card, parentContainer, fullText) {
+    if (!card && !parentContainer) return false;
+    
+    // 1. Textos explícitos
+    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText)) {
+      return true;
+    }
+    
+    // 2. Caracteres Unicode de checkmark
+    if (/[✓✔✅]/.test(fullText)) {
+      return true;
+    }
+
+    const container = parentContainer || card;
+    if (container && container.querySelector) {
+      // 3. Clases de estado positivo de Tailwind y Microsoft
+      if (container.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i]')) {
+        return true;
+      }
+
+      // 4. Chequear cualquier SVG con color verde o polyline de tick
+      const svgs = container.querySelectorAll('svg');
+      for (const svg of svgs) {
+        const html = svg.outerHTML || '';
+        if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|green|check/i.test(html)) {
+          return true;
+        }
+      }
+    }
+
+    // 5. Helper DOM
+    if (DOM && DOM.hasCompletionMark && (DOM.hasCompletionMark(card) || (parentContainer && DOM.hasCompletionMark(parentContainer)))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Encuentra el verdadero contenedor de la tarjeta ascendiendo desde enlaces o botones
    * para asegurar que incluya los badges de puntos y los textos de estado (ej: "Completadas").
    */
@@ -165,8 +222,14 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         break;
       }
       const parent = node.parentElement;
-      // Si el contenedor padre alberga múltiples tarjetas hermanas, 'node' ya es la tarjeta individual dentro del grid
-      const siblingCards = parent.querySelectorAll('a.group\\/ctrl, a[href*="bing.com"], a[href*="rewards"]');
+      const text = parent.innerText || '';
+      // Si el texto incluye palabras de completado y el nodo actual no, este padre es el contenedor de la tarjeta
+      if (/completad|✔|✓|✅/i.test(text) && !/completad|✔|✓|✅/i.test(node.innerText || '')) {
+        node = parent;
+        break;
+      }
+      // Si el padre contiene múltiples enlaces a bing.com con diferentes URLs, el padre es el grid
+      const siblingCards = parent.querySelectorAll('a.group\\/ctrl, a[href*="bing.com/search"]');
       if (siblingCards.length > 1) {
         break;
       }
@@ -269,14 +332,10 @@ window.RewardsWorkers = window.RewardsWorkers || {};
           points = _extractPoints(fullText) || '+10';
         }
 
-        const hasCheckmark = 
-          (DOM && DOM.hasCompletionMark && (DOM.hasCompletionMark(card) || DOM.hasCompletionMark(parentContainer))) ||
-          parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check, [class*="checkmark"], [class*="complete"], [class*="done"], [class*="success"], [class*="claimed"]') !== null || 
-          /\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText) ||
-          /[✓✔✅]/.test(fullText);
+        const completed = _isCardCompleted(card, parentContainer, fullText);
 
         // Si no tiene puntos detectables Y no tiene marca de completado, verificar si es tarea válida
-        if (!points && !hasCheckmark) {
+        if (!points && !completed) {
           if (/quiz|poll|supersonic|search|bing/i.test(url)) {
             points = '+10';
           } else {
@@ -288,7 +347,6 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         if (seenUrls.has(urlKey)) continue;
         seenUrls.add(urlKey);
 
-        const completed = hasCheckmark;
         const type = _detectType(url, card);
 
         let title = "Tarea del Conjunto Diario";
@@ -313,6 +371,41 @@ window.RewardsWorkers = window.RewardsWorkers || {};
 
       } catch (err) {
         console.error(`${TAG} Error parseando tarjeta:`, err);
+      }
+    }
+
+    // Cross-check con el contador oficial de "Tu actividad" -> "Conjunto diario: Actividad: X/3"
+    const activityCounter = _getDailyActivityCounter();
+    if (activityCounter) {
+      console.log(`${TAG} Contador oficial de Tu actividad detectado: ${activityCounter.completed}/${activityCounter.total}`);
+      if (activityCounter.completed === activityCounter.total && activityCounter.total > 0) {
+        tasks.forEach(t => t.completed = true);
+      } else if (activityCounter.completed > 0) {
+        const currentCompleted = tasks.filter(t => t.completed).length;
+        if (currentCompleted < activityCounter.completed) {
+          let needed = activityCounter.completed - currentCompleted;
+          for (const t of tasks) {
+            if (!t.completed && needed > 0) {
+              t.completed = true;
+              needed--;
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback de respaldo absoluto en el dashboard si no se pudieron extraer tarjetas DOM
+    if (tasks.length === 0 && window.location.pathname.includes('/dashboard')) {
+      console.log(`${TAG} Generando tareas representativas del Conjunto Diario para dashboard...`);
+      for (let i = 1; i <= 3; i++) {
+        tasks.push({
+          title: `Conjunto Diario #${i}`,
+          points: '+10',
+          type: 'search',
+          completed: activityCounter ? (activityCounter.completed >= i) : false,
+          element: null,
+          url: 'https://www.bing.com'
+        });
       }
     }
 

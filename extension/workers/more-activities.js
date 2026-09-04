@@ -237,6 +237,31 @@ window.RewardsWorkers = window.RewardsWorkers || {};
   // API pública
   // ---------------------------------------------------------------------------
 
+  function _isCardCompleted(card, parentContainer, fullText) {
+    if (!card && !parentContainer) return false;
+    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText)) return true;
+    if (/[✓✔✅]/.test(fullText)) return true;
+
+    const container = parentContainer || card;
+    if (container && container.querySelector) {
+      if (container.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i]')) {
+        return true;
+      }
+      const svgs = container.querySelectorAll('svg');
+      for (const svg of svgs) {
+        const html = svg.outerHTML || '';
+        if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|green|check/i.test(html)) {
+          return true;
+        }
+      }
+    }
+
+    if (DOM && DOM.hasCompletionMark && (DOM.hasCompletionMark(card) || (parentContainer && DOM.hasCompletionMark(parentContainer)))) {
+      return true;
+    }
+    return false;
+  }
+
   function _findCardContainer(card) {
     if (!card) return card;
     let node = card;
@@ -245,8 +270,12 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         break;
       }
       const parent = node.parentElement;
-      // Si el contenedor padre alberga múltiples tarjetas hermanas, 'node' ya es la tarjeta individual dentro del grid
-      const siblingCards = parent.querySelectorAll('a.group\\/ctrl, a[href*="bing.com"], a[href*="rewards"]');
+      const text = parent.innerText || '';
+      if (/completad|✔|✓|✅/i.test(text) && !/completad|✔|✓|✅/i.test(node.innerText || '')) {
+        node = parent;
+        break;
+      }
+      const siblingCards = parent.querySelectorAll('a.group\\/ctrl, a[href*="bing.com/search"]');
       if (siblingCards.length > 1) {
         break;
       }
@@ -305,11 +334,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         points = _extractPoints(fullText);
       }
 
-      const hasCheckmark = 
-        (DOM && DOM.hasCompletionMark && (DOM.hasCompletionMark(card) || DOM.hasCompletionMark(parentContainer))) ||
-        parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check, [class*="checkmark"], [class*="complete"], [class*="done"], [class*="success"], [class*="claimed"]') !== null || 
-        /\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText) ||
-        /[✓✔✅]/.test(fullText);
+      const hasCheckmark = _isCardCompleted(card, parentContainer, fullText);
 
       // Si no tiene puntos detectables Y no tiene marca de completado, comprobar si es enlace de tarea válido
       if (!points && !hasCheckmark) {

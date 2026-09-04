@@ -22,22 +22,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
       return true;
     }
 
-    if (message.action === "startAutoClaimAll") {
-      console.log("[RewardsBot] Orden recibida: Ejecutando reclamación automática de tareas...");
-      setTimeout(async () => {
-        await runFullScan();
-        const pendingCount = countPendingTasks();
-        console.log(`[RewardsBot] Tareas pendientes encontradas: ${pendingCount}`);
-        if (pendingCount > 0) {
-          runClaimAll();
-        } else if (window.location.pathname.includes('/dashboard')) {
-          console.log("[RewardsBot] No se encontraron tareas en /dashboard. Navegando a /earn...");
-          window.location.href = "https://rewards.bing.com/earn";
-        }
-      }, 2000);
-      sendResponse({ success: true });
-      return true;
-    }
+
   });
 
   // Escuchar cambios en stats y session para actualizar el panel flotante
@@ -209,7 +194,7 @@ function checkCaptcha() {
   }
 
   if (!found && document.body) {
-    const bodyText = document.body.innerText.toLowerCase();
+    const bodyText = ((document.body && (document.body.innerText || document.body.textContent)) || '').toLowerCase();
     const phrases = [
       "verify you are human",
       "verification required",
@@ -543,26 +528,29 @@ function injectStyles() {
     }
 
     #rewards-auto-panel {
-      position: fixed;
-      top: 80px;
-      left: 24px;
-      right: auto;
-      width: 360px;
-      max-height: 85vh;
-      background: ${THEME.bg};
-      backdrop-filter: blur(16px) saturate(1.8);
-      -webkit-backdrop-filter: blur(16px) saturate(1.8);
-      border: 1px solid ${THEME.panelBorder};
-      border-radius: 14px;
+      position: fixed !important;
+      top: 80px !important;
+      left: 24px !important;
+      right: auto !important;
+      width: 360px !important;
+      max-height: 85vh !important;
+      background: ${THEME.bg} !important;
+      backdrop-filter: blur(16px) saturate(1.8) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(1.8) !important;
+      border: 1px solid ${THEME.panelBorder} !important;
+      border-radius: 14px !important;
       box-shadow: 
         0 0 0 1px rgba(255,255,255,0.08),
         0 4px 6px -1px rgba(0,0,0,0.3),
         0 20px 40px -10px rgba(0,0,0,0.6),
-        0 0 80px -20px rgba(16, 185, 129, 0.15);
+        0 0 80px -20px rgba(16, 185, 129, 0.15) !important;
       z-index: 2147483647 !important;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
+      overflow: hidden !important;
+      display: flex !important;
+      flex-direction: column !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
       transition: opacity 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
       animation: panelSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
