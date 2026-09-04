@@ -280,22 +280,61 @@ if (isRewardsPage) {
     const autoClaimPending = storage && storage.autoClaimPending;
 
     if (hasHash || autoClaimPending) {
-      console.log("[RewardsBot] 🚀 Auto-claim activado (hash o storage). Iniciando escaneo y reclamación...");
-      await chrome.storage.local.set({ autoClaimPending: false });
-
+      console.log("[RewardsBot] 🚀 Auto-claim activado (hash o storage). Iniciando escaneo y reclamación en " + window.location.pathname);
+      
       setTimeout(async () => {
+        // En /earn, forzar lazy loading antes del escaneo
+        if (window.location.pathname.includes('/earn') && window.RewardsWorkers && window.RewardsWorkers.MoreActivities) {
+          updateStatus('Cargando actividades con lazy scroll...', 'info');
+          try {
+            await window.RewardsWorkers.MoreActivities.scan();
+          } catch(e) {}
+        }
+
         await runFullScan();
         const pendingCount = countPendingTasks();
-        console.log(`[RewardsBot] Tareas pendientes detectadas: ${pendingCount}`);
+        console.log(`[RewardsBot] Tareas pendientes detectadas en ${window.location.pathname}: ${pendingCount}`);
+        
         if (pendingCount > 0) {
           runClaimAll();
-        } else if (window.location.pathname.includes('/dashboard')) {
-          console.log("[RewardsBot] No se encontraron tareas en /dashboard. Navegando a /earn...");
-          window.location.href = "https://rewards.bing.com/earn#autoClaim=true";
+        } else if (window.location.pathname.includes('/dashboard') || window.location.pathname === "/") {
+          console.log("[RewardsBot] Conjunto Diario completado o al día en /dashboard. Avanzando a /earn...");
+          showToast('Conjunto Diario listo', 'Avanzando a tareas de Ganar (/earn)...', 'info');
+          setTimeout(() => {
+            window.location.href = "https://rewards.bing.com/earn#autoClaim=true";
+          }, 1500);
+        } else {
+          console.log("[RewardsBot] Todas las tareas de /earn y /dashboard están completadas.");
+          showToast('¡Todo completado!', 'No quedan tareas pendientes de Rewards hoy.', 'success');
+          await chrome.storage.local.set({ autoClaimPending: false });
+          try {
+            history.replaceState(null, '', window.location.pathname);
+          } catch(e) {}
         }
-      }, 1500);
+      }, 1200);
     }
   };
+
+  // Listener para mensajes desde background/popup
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "startAutoClaimAll") {
+      console.log("[RewardsBot] Recibida orden startAutoClaimAll.");
+      (async () => {
+        await runFullScan();
+        const pending = countPendingTasks();
+        if (pending > 0) {
+          await runClaimAll();
+        } else if (window.location.pathname.includes('/dashboard') || window.location.pathname === "/") {
+          console.log("[RewardsBot] Conjunto diario al día. Navegando a /earn...");
+          window.location.href = "https://rewards.bing.com/earn#autoClaim=true";
+        } else {
+          showToast('Todo al día', 'Todas las tareas disponibles ya están completadas.', 'success');
+        }
+      })();
+      sendResponse({ success: true });
+      return true;
+    }
+  });
 
   // Inicializar inmediatamente cuando el DOM esté listo
   if (document.readyState === "loading") {
@@ -1351,7 +1390,7 @@ function initRewardsPanel() {
       </div>
       <div>
         <span class="rap-header-title">Rewards <span>Auto</span><span class="rap-activity-dot" id="rap-activity-dot"></span></span>
-        <span class="rap-header-version">v4.5.0</span>
+        <span class="rap-header-version">v4.6.0</span>
       </div>
     </div>
     <div id="rap-header-points-container" style="display: none; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.08); padding: 3px 8px; border-radius: 12px; margin-left: auto; margin-right: 10px; border: 1px solid rgba(245, 158, 11, 0.3);">
@@ -1406,7 +1445,7 @@ function initRewardsPanel() {
         </svg>
         <span class="refresh-text">Escanear</span>
       </button>
-      <span>Rewards Auto v4.5.0</span>
+      <span>Rewards Auto v4.6.0</span>
     </div>
   `;
 
@@ -2071,28 +2110,20 @@ function countPendingTasks() {
 // ─── Escaneo Completo de Tareas ───
 async function runFullScan() {
   // Guard: don't overwrite task arrays while a claim is in progress
-  // This prevents the race condition where a re-scan resets processing flags and shifts indices
   if (panelState.isProcessing) {
     console.log('[RewardsBot] Scan skipped — claim in progress.');
     return;
   }
   
-  let scanAttempts = 0;
-  const maxAttempts = 6;
-
-  const doScan = async () => {
-    // Re-check guard at each attempt in case claiming started during a retry delay
+  const maxAttempts = 3;
+  for (let scanAttempts = 1; scanAttempts <= maxAttempts; scanAttempts++) {
     if (panelState.isProcessing) {
       console.log('[RewardsBot] Scan attempt aborted — claim started.');
       return;
     }
-    scanAttempts++;
     console.log(`[RewardsBot] Escaneo #${scanAttempts}...`);
 
-    const isDashboard = window.location.pathname.includes('/dashboard') || window.location.pathname === "/";
-    const isEarn = window.location.pathname.includes('/earn');
-
-    // 1. Daily Set (se escanea en todas las páginas de Rewards)
+    // 1. Daily Set
     try {
       if (window.RewardsWorkers && window.RewardsWorkers.DailySet) {
         const tasks = await window.RewardsWorkers.DailySet.scan();
@@ -2102,7 +2133,7 @@ async function runFullScan() {
     } catch (e) { console.log("[RewardsBot] Error escaneando Daily Set:", e); }
     panelState.sections.dailySet.loading = false;
 
-    // 2. Punch Cards (se escanea en todas las páginas de Rewards)
+    // 2. Punch Cards
     try {
       if (window.RewardsWorkers && window.RewardsWorkers.PunchCards) {
         const tasks = await window.RewardsWorkers.PunchCards.scan();
@@ -2140,13 +2171,16 @@ async function runFullScan() {
     renderSections();
     updateStatusBar();
 
-    const totalPending = countPendingTasks();
-    if (totalPending === 0 && scanAttempts < maxAttempts) {
-      setTimeout(doScan, 2000);
-    }
-  };
+    const totalFound = (panelState.sections.dailySet.tasks?.length || 0) + 
+                       (panelState.sections.moreActivities.tasks?.length || 0);
 
-  await doScan();
+    // Si encontramos tarjetas o ya estamos en el último intento, terminar
+    if (totalFound > 0 || scanAttempts === maxAttempts) {
+      break;
+    }
+    // Esperar a que React renderice antes del siguiente reintento
+    await new Promise(r => setTimeout(r, 1200));
+  }
 }
 
 // ─── Reclamar Tarea Individual ───
@@ -2354,17 +2388,26 @@ async function runClaimAll() {
 
   btn.disabled = false;
   btn.innerHTML = '<span>🚀</span><span>Reclamar Todo Automáticamente</span>';
-  panelState.isProcessing = false; // Allow scans again
+  panelState.isProcessing = false;
 
-  // Redirigir/Recargar
   const isDashboard = window.location.pathname.includes("dashboard") || window.location.pathname === "/";
-  setTimeout(() => {
+  setTimeout(async () => {
     if (isDashboard) {
-      window.location.href = "https://rewards.bing.com/earn";
+      console.log("[RewardsBot] Conjunto Diario finalizado en /dashboard. Avanzando a /earn...");
+      showToast('Avanzando a Ganar', 'Cargando actividades de /earn...', 'info');
+      window.location.href = "https://rewards.bing.com/earn#autoClaim=true";
     } else {
-      window.location.reload();
+      console.log("[RewardsBot] Actividades de /earn finalizadas. Todo completado.");
+      await chrome.storage.local.set({ autoClaimPending: false });
+      try {
+        history.replaceState(null, '', window.location.pathname);
+      } catch(e) {}
+      showToast('¡Misión cumplida!', 'Todas las tareas de Microsoft Rewards han sido completadas.', 'success');
+      try {
+        chrome.runtime.sendMessage({ action: "syncPoints" });
+      } catch(e) {}
     }
-  }, 3000);
+  }, 2000);
 }
 
 // ============================================================

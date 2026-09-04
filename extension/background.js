@@ -147,6 +147,8 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.alarms.create("check-schedule", { periodInMinutes: 1 });
   // Recordatorio nocturno a las 10 PM (verifica cada 30 min)
   chrome.alarms.create("daily-tasks-reminder", { periodInMinutes: 30 });
+  // Verificación periódica de nuevo Conjunto Diario y tareas cada 60 min
+  chrome.alarms.create("check-daily-rewards-tasks", { periodInMinutes: 60 });
   updateScheduleAlarm();
 });
 
@@ -516,6 +518,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   } else if (alarm.name === "daily-tasks-reminder") {
     // Recordatorio de las 10 PM si no se han completado las tareas
     checkDailyTasksReminder();
+  } else if (alarm.name === "check-daily-rewards-tasks") {
+    // Verificación periódica de nuevas tareas diarias
+    checkNewDailyTasks();
   } else if (alarm.name === "search-next-step") {
     console.log("[RewardsBot] Alarm 'search-next-step' fired!");
     const data = await chrome.storage.local.get("session");
@@ -586,18 +591,19 @@ function waitForTabLoad(tabId, timeoutMs = 10000) {
 // Abrir el dashboard de Rewards para que los content scripts trabajen
 async function openRewardsDashboard(autoClaim = false) {
   if (autoClaim) {
-    await chrome.storage.local.set({ autoClaimPending: true });
+    await chrome.storage.local.set({ autoClaimPending: true, autoClaimPhase: 'dashboard' });
   }
 
-  const targetUrl = autoClaim ? "https://rewards.bing.com/earn#autoClaim=true" : "https://rewards.bing.com/earn";
+  // Siempre comenzamos en /dashboard para reclamar primero el Conjunto Diario
+  const targetUrl = autoClaim ? "https://rewards.bing.com/dashboard#autoClaim=true" : "https://rewards.bing.com/dashboard";
   const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
   let targetTabId = null;
 
   if (tabs.length > 0) {
     targetTabId = tabs[0].id;
     await registerAutomationTab(targetTabId);
-    await appendActivityLog("🎯 Navegando a Microsoft Rewards (Ganar) para reclamar tareas");
-    await chrome.tabs.update(targetTabId, { url: targetUrl });
+    await appendActivityLog("🎯 Navegando a Microsoft Rewards (Panel) para reclamar Conjunto Diario y tareas");
+    await chrome.tabs.update(targetTabId, { url: targetUrl, active: false });
   } else {
     // Abrir nueva pestaña en Rewards en segundo plano (active: false)
     const newTab = await createTabSafe({ url: targetUrl, active: false });
@@ -605,14 +611,14 @@ async function openRewardsDashboard(autoClaim = false) {
       targetTabId = newTab.id;
       await registerAutomationTab(targetTabId);
       await trackOpenedTab(targetTabId);
-      await appendActivityLog("🎯 Abriendo Microsoft Rewards (Ganar) para reclamar tareas en segundo plano");
+      await appendActivityLog("🎯 Abriendo Microsoft Rewards (Panel) para reclamar Conjunto Diario en segundo plano");
     }
   }
 
   if (targetTabId && autoClaim) {
     setTimeout(() => {
       chrome.tabs.sendMessage(targetTabId, { action: "startAutoClaimAll" }).catch(() => {});
-    }, 3000);
+    }, 2500);
   }
 }
 
@@ -657,6 +663,36 @@ async function checkDailyTasksReminder() {
         );
       }
     }
+  }
+}
+
+// Comprueba periódicamente si hay nuevo Conjunto Diario o tareas para ganar
+async function checkNewDailyTasks() {
+  try {
+    const stats = await syncUserInfo();
+    if (!stats) return;
+
+    const storage = await chrome.storage.local.get(["settings", "lastDailyCheckDate"]);
+    const settings = storage.settings || DEFAULT_SETTINGS;
+    const today = new Date().toISOString().split("T")[0];
+
+    // Notificar una vez al día cuando se detectan nuevas tareas
+    if (storage.lastDailyCheckDate !== today) {
+      await chrome.storage.local.set({ lastDailyCheckDate: today });
+      
+      if (settings.autoClaimDailyTasks === true) {
+        console.log("[RewardsBot] Auto-reclamando Conjunto Diario y tareas en segundo plano...");
+        await appendActivityLog("⚡ Ejecutando reclamo automático de Conjunto Diario");
+        await openRewardsDashboard(true);
+      } else {
+        showNotification(
+          "🌟 Nuevas Tareas en Microsoft Rewards",
+          "El Conjunto Diario de hoy y actividades de Ganar están disponibles para reclamar."
+        );
+      }
+    }
+  } catch (err) {
+    console.warn("[RewardsBot] Error en checkNewDailyTasks:", err);
   }
 }
 

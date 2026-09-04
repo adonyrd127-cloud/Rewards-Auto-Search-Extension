@@ -252,6 +252,11 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       const parentContainer = card.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || card.parentElement || card;
       const fullText = (card.innerText || card.textContent || '') + ' ' + (parentContainer.innerText || parentContainer.textContent || '');
       
+      // Ignorar tareas bloqueadas exclusivas de la app móvil
+      if (/\b(bloquead[oa]s?|locked|solo en la aplicación|app only)\b/i.test(fullText)) {
+        return null;
+      }
+
       let points = '';
       const pointsSelectors = [
         '.text-statusInformativeTintFg',
@@ -264,12 +269,16 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       for (const sel of pointsSelectors) {
         const pointsEl = parentContainer.querySelector(sel);
         if (pointsEl) {
-          const match = pointsEl.innerText.match(/\+?\s*(\d+)/);
+          const match = pointsEl.innerText.match(/[+✓✔✅]?\s*(\d+)/);
           if (match) {
             points = '+' + match[1];
             break;
           }
         }
+      }
+      if (!points) {
+        const match = fullText.match(/[+✓✔✅]\s*(\d{1,3})/);
+        if (match) points = '+' + match[1];
       }
       if (!points) {
         points = _extractPoints(fullText);
