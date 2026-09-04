@@ -288,62 +288,7 @@ async function updateDashboard() {
   updateDailyTasksUI(data.scannedTasks);
 }
 
-// Render Daily Tasks widget in popup
-function updateDailyTasksUI(scannedTasks) {
-  const countEl = document.getElementById('daily-tasks-count');
-  const progressFill = document.getElementById('progress-daily-tasks');
-  const listEl = document.getElementById('daily-tasks-list');
-  if (!listEl) return;
 
-  if (!scannedTasks || (!scannedTasks.dailySet && !scannedTasks.moreActivities)) {
-    if (countEl) countEl.innerText = "Sin escanear";
-    if (progressFill) progressFill.style.width = "0%";
-    listEl.innerHTML = `
-      <div class="task-item pending" style="opacity: 0.7;">
-        <span class="task-icon">🔍</span>
-        <span class="task-name">Abre Rewards para sincronizar tareas</span>
-      </div>
-    `;
-    return;
-  }
-
-  const allTasks = [
-    ...(scannedTasks.dailySet || []).map(t => ({ ...t, category: 'Conjunto Diario' })),
-    ...(scannedTasks.moreActivities || []).map(t => ({ ...t, category: 'Ganar' }))
-  ];
-
-  if (allTasks.length === 0) {
-    if (countEl) countEl.innerText = "0 tareas";
-    if (progressFill) progressFill.style.width = "0%";
-    listEl.innerHTML = `
-      <div class="task-item completed">
-        <span class="task-icon">✓</span>
-        <span class="task-name">No se detectaron tareas pendientes</span>
-      </div>
-    `;
-    return;
-  }
-
-  const completed = allTasks.filter(t => t.completed).length;
-  const total = allTasks.length;
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  if (countEl) {
-    countEl.innerText = `${completed} / ${total} (${percent}%)`;
-    countEl.classList.remove('skeleton-text');
-  }
-  if (progressFill) {
-    progressFill.style.width = `${percent}%`;
-  }
-
-  listEl.innerHTML = allTasks.slice(0, 4).map(t => `
-    <div class="task-item ${t.completed ? 'completed' : 'pending'}">
-      <span class="task-icon">${t.completed ? '✓' : '○'}</span>
-      <span class="task-name" title="${t.title || 'Actividad'}">${t.title || 'Actividad Rewards'}</span>
-      <span class="task-points badge" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08);">${t.points || '+10'}</span>
-    </div>
-  `).join('');
-}
 
 // Update circular progress ring offset dynamically
 function updateCircularProgress(elementId, value, max) {

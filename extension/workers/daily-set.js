@@ -159,14 +159,23 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    */
   function _findCardContainer(card) {
     if (!card) return card;
-    let current = card;
-    if (current.tagName === 'A' || current.getAttribute('role') === 'button' || (current.className && typeof current.className === 'string' && current.className.includes('group'))) {
-      if (current.parentElement && current.parentElement !== document.body) {
-        current = current.parentElement;
+    let node = card;
+    for (let i = 0; i < 4; i++) {
+      if (!node.parentElement || node.parentElement === document.body || node.parentElement.tagName === 'MAIN') {
+        break;
+      }
+      const parent = node.parentElement;
+      // Si el contenedor padre alberga múltiples tarjetas hermanas, 'node' ya es la tarjeta individual dentro del grid
+      const siblingCards = parent.querySelectorAll('a.group\\/ctrl, a[href*="bing.com"], a[href*="rewards"]');
+      if (siblingCards.length > 1) {
+        break;
+      }
+      node = parent;
+      if (node.matches && node.matches('div[class*="card" i], div[class*="item" i], li, article, mee-card, [data-bi-area]')) {
+        break;
       }
     }
-    const container = current.closest('div[class*="card" i], div[class*="item" i], li, article, mee-card, [data-bi-area]') || current;
-    return container;
+    return node;
   }
 
   // ---------------------------------------------------------------------------
