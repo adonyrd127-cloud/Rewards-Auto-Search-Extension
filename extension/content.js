@@ -4,7 +4,9 @@
 // También maneja el auto-solver de quizzes/polls en páginas de búsqueda
 // ============================================================
 
-const isRewardsPage = window.location.hostname === "rewards.bing.com" || window.location.pathname.includes("/rewards/");
+const isRewardsPage = window.location.hostname.includes("rewards.bing.com") ||
+                      window.location.hostname.includes("rewards.microsoft.com") ||
+                      window.location.pathname.includes("/rewards/");
 const isSearchPage = window.location.hostname.includes("bing.com") && window.location.pathname.includes("/search");
 
 // State and helper functions for sequential task tab lifecycle tracking (rewards dashboard)
@@ -255,7 +257,7 @@ if (isRewardsPage) {
 
   const ensurePanelAndAutoClaim = async () => {
     if (!document.getElementById('rewards-auto-panel')) {
-      if (document.body) {
+      if (document.body || document.documentElement) {
         initRewardsPanel();
       }
     }
@@ -330,7 +332,7 @@ if (isRewardsPage) {
 
   // Heartbeat cada 3 segundos: asegura que el panel flotante nunca desaparezca tras renders de React/Next.js
   setInterval(() => {
-    if (!document.getElementById('rewards-auto-panel') && document.body) {
+    if (!document.getElementById('rewards-auto-panel') && (document.body || document.documentElement)) {
       console.log("[RewardsBot] Panel flotante no encontrado en DOM. Re-inyectando...");
       initRewardsPanel();
     }
@@ -529,10 +531,12 @@ function injectStyles() {
 
     #rewards-auto-panel {
       position: fixed !important;
-      top: 80px !important;
-      left: 24px !important;
-      right: auto !important;
+      bottom: 24px !important;
+      right: 24px !important;
+      top: auto !important;
+      left: auto !important;
       width: 360px !important;
+      max-width: calc(100vw - 48px) !important;
       max-height: 85vh !important;
       background: ${THEME.bg} !important;
       backdrop-filter: blur(16px) saturate(1.8) !important;
@@ -553,6 +557,31 @@ function injectStyles() {
       pointer-events: auto !important;
       transition: opacity 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
       animation: panelSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #rap-floating-toggle {
+      position: fixed !important;
+      bottom: 24px !important;
+      right: 24px !important;
+      z-index: 2147483647 !important;
+      background: linear-gradient(135deg, #059669, #10b981) !important;
+      color: #ffffff !important;
+      padding: 10px 18px !important;
+      border-radius: 30px !important;
+      box-shadow: 0 8px 30px rgba(16, 185, 129, 0.45), 0 0 0 1px rgba(255,255,255,0.2) !important;
+      cursor: pointer !important;
+      display: none;
+      align-items: center !important;
+      gap: 10px !important;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      user-select: none !important;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease !important;
+    }
+    #rap-floating-toggle:hover {
+      transform: translateY(-2px) scale(1.03) !important;
+      box-shadow: 0 12px 36px rgba(16, 185, 129, 0.65), 0 0 0 1px rgba(255,255,255,0.3) !important;
     }
 
     #rewards-auto-panel.all-complete {
@@ -1353,7 +1382,7 @@ function injectStyles() {
       100% { transform: rotate(360deg); }
     }
   `;
-  document.head.appendChild(style);
+  document.head ? document.head.appendChild(style) : (document.documentElement || document.body).appendChild(style);
 }
 
 // ─── Inicialización del Panel ───
@@ -1363,9 +1392,64 @@ function initRewardsPanel() {
 
   injectStyles();
 
+  // Botón flotante persistente (Launcher Pill) — siempre accesible en la esquina inferior derecha
+  let toggleBtn = document.getElementById('rap-floating-toggle');
+  if (!toggleBtn) {
+    toggleBtn = document.createElement('div');
+    toggleBtn.id = 'rap-floating-toggle';
+    toggleBtn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+      </svg>
+      <span id="rap-toggle-title">Rewards Auto</span>
+      <span id="rap-toggle-badge" style="background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700;">Abrir</span>
+    `;
+    (document.documentElement || document.body).appendChild(toggleBtn);
+  }
+
   const panel = document.createElement('div');
   panel.id = 'rewards-auto-panel';
-  if (panelState.isMinimized) panel.classList.add('minimized');
+  panel.style.cssText = `
+    position: fixed !important;
+    bottom: 24px !important;
+    right: 24px !important;
+    top: auto !important;
+    left: auto !important;
+    width: 360px !important;
+    max-width: calc(100vw - 48px) !important;
+    max-height: 85vh !important;
+    background: rgba(11, 15, 25, 0.96) !important;
+    backdrop-filter: blur(16px) saturate(1.8) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(1.8) !important;
+    border: 1px solid rgba(30, 41, 59, 0.8) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 20px 40px -10px rgba(0,0,0,0.6), 0 0 80px -20px rgba(16, 185, 129, 0.15) !important;
+    z-index: 2147483647 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  `;
+
+  if (panelState.isMinimized || !panelState.isOpen) {
+    panel.style.display = 'none';
+    toggleBtn.style.display = 'flex';
+  } else {
+    panel.style.display = 'flex';
+    toggleBtn.style.display = 'none';
+  }
+
+  toggleBtn.onclick = () => {
+    panelState.isOpen = true;
+    panelState.isMinimized = false;
+    panel.style.display = 'flex';
+    panel.style.opacity = '1';
+    panel.style.transform = 'scale(1)';
+    toggleBtn.style.display = 'none';
+  };
 
   // Header
   const header = document.createElement('div');
@@ -1379,7 +1463,7 @@ function initRewardsPanel() {
       </div>
       <div>
         <span class="rap-header-title">Rewards <span>Auto</span><span class="rap-activity-dot" id="rap-activity-dot"></span></span>
-        <span class="rap-header-version">v4.6.0</span>
+        <span class="rap-header-version">v4.6.3</span>
       </div>
     </div>
     <div id="rap-header-points-container" style="display: none; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.08); padding: 3px 8px; border-radius: 12px; margin-left: auto; margin-right: 10px; border: 1px solid rgba(245, 158, 11, 0.3);">
@@ -1434,7 +1518,7 @@ function initRewardsPanel() {
         </svg>
         <span class="refresh-text">Escanear</span>
       </button>
-      <span>Rewards Auto v4.6.0</span>
+      <span>Rewards Auto v4.6.3</span>
     </div>
   `;
 
@@ -1443,7 +1527,7 @@ function initRewardsPanel() {
   panel.appendChild(body);
   panel.appendChild(footer);
 
-  document.body.appendChild(panel);
+  (document.documentElement || document.body).appendChild(panel);
 
   // Toast Container
   let toastContainer = document.getElementById('rap-toast-container');
@@ -1451,7 +1535,7 @@ function initRewardsPanel() {
     toastContainer = document.createElement('div');
     toastContainer.id = 'rap-toast-container';
     toastContainer.className = 'rap-toast-container';
-    document.body.appendChild(toastContainer);
+    (document.documentElement || document.body).appendChild(toastContainer);
   }
 
   setupPanelEvents(panel, header);
@@ -1511,6 +1595,7 @@ function setupPanelEvents(panel, header) {
     panel.style.left = newX + 'px';
     panel.style.top = newY + 'px';
     panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
     panelState.position = { x: newX, y: newY };
   });
 
@@ -1522,8 +1607,10 @@ function setupPanelEvents(panel, header) {
   const minBtn = panel.querySelector('.rap-btn-icon.minimize');
   if (minBtn) {
     minBtn.addEventListener('click', () => {
-      panelState.isMinimized = !panelState.isMinimized;
-      panel.classList.toggle('minimized', panelState.isMinimized);
+      panelState.isMinimized = true;
+      panel.style.display = 'none';
+      const toggle = document.getElementById('rap-floating-toggle');
+      if (toggle) toggle.style.display = 'flex';
     });
   }
 
@@ -1531,11 +1618,13 @@ function setupPanelEvents(panel, header) {
   if (closeBtn) {
     closeBtn.addEventListener('click', () => {
       panel.style.opacity = '0';
-      panel.style.transform = 'scale(0.9)';
+      panel.style.transform = 'scale(0.95)';
       setTimeout(() => {
-        panel.remove();
+        panel.style.display = 'none';
         panelState.isOpen = false;
-      }, 300);
+        const toggle = document.getElementById('rap-floating-toggle');
+        if (toggle) toggle.style.display = 'flex';
+      }, 200);
     });
   }
 
@@ -2049,6 +2138,18 @@ async function updateStatusBar() {
   // Update general progress and activity dot
   updateGeneralProgress();
   updateActivityDot();
+
+  // Actualizar badge en botón lanzador flotante
+  const toggleBadge = document.getElementById('rap-toggle-badge');
+  if (toggleBadge) {
+    if (totalTasks > 0) {
+      toggleBadge.innerText = `${completedTasks}/${totalTasks}`;
+      toggleBadge.style.color = completedTasks === totalTasks ? '#10b981' : '#f59e0b';
+    } else {
+      toggleBadge.innerText = 'Abrir';
+      toggleBadge.style.color = '#ffffff';
+    }
+  }
 
   // Extraer Puntos de Hoy del DOM (siempre, independientemente del estado de tareas)
   try {

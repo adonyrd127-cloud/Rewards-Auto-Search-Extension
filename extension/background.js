@@ -150,6 +150,16 @@ chrome.runtime.onInstalled.addListener(async () => {
   // Verificación periódica de nuevo Conjunto Diario y tareas cada 60 min
   chrome.alarms.create("check-daily-rewards-tasks", { periodInMinutes: 60 });
   updateScheduleAlarm();
+
+  // Recargar pestañas de rewards abiertas para asegurar inyección inmediata del nuevo content script
+  try {
+    const openRewardsTabs = await chrome.tabs.query({ url: ["*://rewards.bing.com/*", "*://rewards.microsoft.com/*", "*://*.bing.com/rewards/*"] });
+    for (const tab of openRewardsTabs) {
+      if (tab && tab.id) {
+        chrome.tabs.reload(tab.id);
+      }
+    }
+  } catch(e) {}
 });
 
 // ---------------------------------------------------------------------------

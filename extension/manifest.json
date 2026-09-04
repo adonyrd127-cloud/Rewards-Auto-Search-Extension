@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rewards Auto Search & Claimer",
-  "version": "4.6.0",
+  "version": "4.6.3",
   "description": "Automatiza búsquedas y reclama puntos en Microsoft Rewards. Soporta Member, Silver y Gold.",
   "permissions": [
     "storage",
@@ -39,7 +39,10 @@
     {
       "matches": [
         "*://rewards.bing.com/*",
-        "*://*.bing.com/rewards/*"
+        "*://*.bing.com/rewards/*",
+        "*://rewards.microsoft.com/*",
+        "*://*.rewards.microsoft.com/*",
+        "*://*.microsoft.com/rewards/*"
       ],
       "js": [
         "utils/dom-utils.js",
