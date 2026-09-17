@@ -70,6 +70,13 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    * @returns {Element|null}
    */
   function _findMoreActivitiesSection() {
+    // Estrategia 0: Búsqueda directa por ID o selector oficial en /earn
+    const directSection = document.getElementById('moreactivities') || document.querySelector('section#moreactivities');
+    if (directSection) {
+      console.log(`${TAG} Sección encontrada directamente por #moreactivities`);
+      return directSection;
+    }
+
     // Estrategia 1: Buscar por texto en encabezados visibles
     const headingTags = 'h1, h2, h3, h4, h5, [class*="heading"], [class*="title"], [class*="Heading"], [class*="Title"], mee-card-group, p, span, div';
     const headings = DOM.deepQueryAll(document.body, headingTags);
@@ -398,6 +405,12 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    */
   async function _triggerLazyLoad() {
     const originalScroll = window.scrollY;
+
+    const moreActEl = document.getElementById('moreactivities');
+    if (moreActEl) {
+      moreActEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await new Promise(r => setTimeout(r, 600));
+    }
     
     // Scroll progresivo al fondo para activar lazy loading
     const docHeight = Math.max(
@@ -405,9 +418,9 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       document.documentElement.scrollHeight
     );
     
-    for (let y = 0; y < docHeight; y += 400) {
+    for (let y = 0; y < docHeight; y += 450) {
       window.scrollTo(0, y);
-      await new Promise(r => setTimeout(r, 120));
+      await new Promise(r => setTimeout(r, 100));
     }
     
     // Esperar 1.5s para que React/Next.js rendericen el contenido lazy

@@ -204,6 +204,14 @@ chrome.runtime.onStartup.addListener(async () => {
 // State for sequential task tab tracking
 let activeTaskTabId = null;
 let dashboardTabId = null;
+let activeTaskTimer = null;
+const automationTabSet = new Set();
+
+// Populate in-memory set from storage on init
+chrome.storage.local.get('automationTabIds', (data) => {
+  const ids = data.automationTabIds || [];
+  ids.forEach(id => automationTabSet.add(id));
+});
 
 // ---------------------------------------------------------------------------
 // Automation Tab Tracking — prevents automation from running in user's
@@ -217,12 +225,17 @@ let dashboardTabId = null;
  */
 async function registerAutomationTab(tabId) {
   if (!tabId) return;
-  const data = await chrome.storage.local.get('automationTabIds');
-  const ids = data.automationTabIds || [];
-  if (!ids.includes(tabId)) {
-    ids.push(tabId);
-    await chrome.storage.local.set({ automationTabIds: ids });
-    console.log(`[RewardsBot][background] Registered automation tab: ${tabId}. Active set: [${ids}]`);
+  automationTabSet.add(tabId);
+  try {
+    const data = await chrome.storage.local.get('automationTabIds');
+    const ids = data.automationTabIds || [];
+    if (!ids.includes(tabId)) {
+      ids.push(tabId);
+      await chrome.storage.local.set({ automationTabIds: ids });
+      console.log(`[RewardsBot][background] Registered automation tab: ${tabId}. Active set: [${ids}]`);
+    }
+  } catch (e) {
+    console.error('[RewardsBot] Error registering automation tab:', e);
   }
 }
 
@@ -232,18 +245,44 @@ async function registerAutomationTab(tabId) {
  */
 async function unregisterAutomationTab(tabId) {
   if (!tabId) return;
-  const data = await chrome.storage.local.get('automationTabIds');
-  const ids = (data.automationTabIds || []).filter(id => id !== tabId);
-  await chrome.storage.local.set({ automationTabIds: ids });
-  console.log(`[RewardsBot][background] Unregistered automation tab: ${tabId}. Remaining: [${ids}]`);
+  automationTabSet.delete(tabId);
+  try {
+    const data = await chrome.storage.local.get('automationTabIds');
+    const ids = (data.automationTabIds || []).filter(id => id !== tabId);
+    await chrome.storage.local.set({ automationTabIds: ids });
+    console.log(`[RewardsBot][background] Unregistered automation tab: ${tabId}. Remaining: [${ids}]`);
+  } catch (e) {
+    console.error('[RewardsBot] Error unregistering automation tab:', e);
+  }
 }
 
 /**
  * Clears all tracked automation tabs (used on session end).
  */
 async function clearAllAutomationTabs() {
+  automationTabSet.clear();
   await chrome.storage.local.set({ automationTabIds: [] });
   console.log('[RewardsBot][background] Cleared all automation tab IDs.');
+}
+
+/**
+ * Schedules safety auto-closing for task tabs to guarantee the dashboard
+ * never hangs if content script fails or external task page doesn't close.
+ */
+function scheduleTaskTabAutoClose(tabId, delayMs = 14000) {
+  if (activeTaskTimer) {
+    clearTimeout(activeTaskTimer);
+    activeTaskTimer = null;
+  }
+  activeTaskTimer = setTimeout(async () => {
+    console.log(`[RewardsBot][background] Safety auto-close timeout (${delayMs}ms) reached for task tab ${tabId}. Closing tab...`);
+    activeTaskTimer = null;
+    try {
+      await chrome.tabs.remove(tabId);
+    } catch (e) {
+      // Tab might already be closed
+    }
+  }, delayMs);
 }
 
 /**
@@ -318,6 +357,11 @@ chrome.tabs.onCreated.addListener((tab) => {
     if (tab.openerTabId === dashboardTabId || (tab.pendingUrl && /bing\.com|microsoft\.com/i.test(tab.pendingUrl))) {
       activeTaskTabId = tab.id;
       registerAutomationTab(tab.id); // Mark as automation-controlled
+      scheduleTaskTabAutoClose(tab.id, 14000);
+      // Ensure tab remains in background if created active
+      if (tab.active) {
+        chrome.tabs.update(dashboardTabId, { active: true }).catch(() => {});
+      }
       console.log(`[RewardsBot][background] Registered active task tab: ${tab.id} opened by dashboard: ${dashboardTabId}`);
     }
   }
@@ -336,6 +380,10 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 
   if (tabId === activeTaskTabId) {
     console.log(`[RewardsBot][background] Active task tab ${tabId} closed.`);
+    if (activeTaskTimer) {
+      clearTimeout(activeTaskTimer);
+      activeTaskTimer = null;
+    }
     activeTaskTabId = null;
     if (dashboardTabId) {
       chrome.tabs.sendMessage(dashboardTabId, { action: "taskTabClosed", tabId }).catch(() => {
@@ -353,12 +401,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // extension's search session or task claiming flow return true.
   if (message.action === "isAutomationTab") {
     const senderTabId = sender.tab?.id;
+    if (!senderTabId) {
+      sendResponse({ isAutomation: false });
+      return;
+    }
+    // Zero-latency synchronous in-memory check
+    if (automationTabSet.has(senderTabId)) {
+      sendResponse({ isAutomation: true });
+      return;
+    }
     chrome.storage.local.get(['automationTabIds', 'session'], (data) => {
       const ids = data.automationTabIds || [];
       const session = data.session || {};
-      // A tab is an automation tab if it's in our tracked set OR if it's
-      // the current session's search tab
       const isAutomation = ids.includes(senderTabId) || session.tabId === senderTabId;
+      if (isAutomation) {
+        automationTabSet.add(senderTabId);
+      }
       sendResponse({ isAutomation });
     });
     return true; // async response
@@ -366,9 +424,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "prepareForTaskTab") {
     dashboardTabId = sender.tab?.id;
+    if (activeTaskTimer) {
+      clearTimeout(activeTaskTimer);
+      activeTaskTimer = null;
+    }
     activeTaskTabId = null;
     console.log(`[RewardsBot][background] Preparing for task tab from dashboard: ${dashboardTabId}`);
     sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.action === "getActiveTaskTab") {
+    sendResponse({ activeTaskTabId });
     return true;
   }
 
@@ -378,6 +445,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (newTab && newTab.id) {
         activeTaskTabId = newTab.id;
         await registerAutomationTab(newTab.id);
+        scheduleTaskTabAutoClose(newTab.id, 14000);
         console.log(`[RewardsBot][background] Task tab opened deterministically: ${newTab.id} for ${message.url}`);
         sendResponse({ success: true, tabId: newTab.id });
       } else {
@@ -393,7 +461,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = sender.tab?.id;
     if (tabId) {
       console.log(`[RewardsBot][background] Closing task tab: ${tabId}`);
-      chrome.tabs.remove(tabId);
+      if (activeTaskTimer && tabId === activeTaskTabId) {
+        clearTimeout(activeTaskTimer);
+        activeTaskTimer = null;
+      }
+      chrome.tabs.remove(tabId).catch(() => {});
       sendResponse({ success: true });
     } else {
       sendResponse({ success: false, error: "No tab ID found" });

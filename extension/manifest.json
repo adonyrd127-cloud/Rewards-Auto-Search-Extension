@@ -58,7 +58,10 @@
     },
     {
       "matches": [
-        "*://*.bing.com/search*"
+        "*://*.bing.com/*"
+      ],
+      "exclude_matches": [
+        "*://rewards.bing.com/*"
       ],
       "js": [
         "utils/dom-utils.js",

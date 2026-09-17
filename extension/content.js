@@ -8,6 +8,7 @@ const isRewardsPage = window.location.hostname.includes("rewards.bing.com") ||
                       window.location.hostname.includes("rewards.microsoft.com") ||
                       window.location.pathname.includes("/rewards/");
 const isSearchPage = window.location.hostname.includes("bing.com") && window.location.pathname.includes("/search");
+const isBingAutomationPage = window.location.hostname.includes("bing.com") && !isRewardsPage;
 
 // State and helper functions for sequential task tab lifecycle tracking (rewards dashboard)
 let taskClosedResolver = null;
@@ -48,7 +49,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
   });
 }
 
-function waitForTaskTabClose(timeoutMs = 60000) {
+function waitForTaskTabClose(timeoutMs = 18000) {
   return new Promise((resolve) => {
     let resolved = false;
     const timer = setTimeout(() => {
@@ -350,8 +351,8 @@ if (isRewardsPage) {
   }).observe(document, { subtree: true, childList: true });
 }
 
-// --- BING SEARCH QUIZ/POLL AUTO-SOLVER & HUMANIZATION ---
-if (isSearchPage) {
+// --- BING SEARCH QUIZ/POLL AUTO-SOLVER & TASK TAB HANDLER ---
+if (isSearchPage || isBingAutomationPage) {
   // Overriding Page Visibility API for 100% search point recognition on background tabs
   try {
     Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
@@ -397,54 +398,68 @@ if (isSearchPage) {
       const session = data.session || {};
       const isRunning = session.status === "running";
 
-      console.log(`[RewardsBot] Bing Search Page. Estado sesión: ${session.status}, isAutomationTab: ${isAutomationTab}, isRewardsTaskTab: ${isRewardsTask}`);
+      console.log(`[RewardsBot] Bing Automation Page. isSearchPage: ${isSearchPage}, Estado sesión: ${session.status}, isAutomationTab: ${isAutomationTab}, isRewardsTaskTab: ${isRewardsTask}`);
 
       if (isRunning || isRewardsTask || isAutomationTab) {
-        console.log("[RewardsBot] Condición cumplida (sesión activa o tarea de Rewards). Iniciando interacción humana y auto-solver...");
+        console.log("[RewardsBot] Condición cumplida (sesión activa o tarea de Rewards). Iniciando interacción humana...");
         
-        // Simular interacciones humanas completas (scroll en resultados, mouse moves y hovers)
-        if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateSearchPageInteractions) {
-          window.RewardsUtils.Human.simulateSearchPageInteractions().catch(() => {});
-        }
+        if (isSearchPage) {
+          // Simular interacciones humanas completas (scroll en resultados, mouse moves y hovers)
+          if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.simulateSearchPageInteractions) {
+            window.RewardsUtils.Human.simulateSearchPageInteractions().catch(() => {});
+          }
 
-        setTimeout(solveActiveTasks, 2500);
+          setTimeout(solveActiveTasks, 2500);
 
-        // Si es una pestaña de tarea de rewards (no sesión de búsqueda), monitorear ciclo de vida y cerrar
-        if (isRewardsTask || (isAutomationTab && !isRunning)) {
-          console.log("[RewardsBot] Tarea de Rewards detectada en pestaña. Iniciando monitoreo de ciclo de vida...");
-          setTimeout(() => {
-            if (isQuizOrPollPresent()) {
-              console.log("[RewardsBot] Quiz o Poll detectado. Monitoreando resolución...");
-              let lastActionTime = Date.now();
-              let totalElapsed = 0;
-              
-              const updateAction = () => {
-                lastActionTime = Date.now();
-              };
-              document.addEventListener("click", updateAction);
+          // Si es una pestaña de tarea de rewards (no sesión de búsqueda), monitorear ciclo de vida y cerrar
+          if (isRewardsTask || (isAutomationTab && !isRunning)) {
+            console.log("[RewardsBot] Tarea de Rewards detectada en pestaña. Iniciando monitoreo de ciclo de vida...");
+            setTimeout(() => {
+              if (isQuizOrPollPresent()) {
+                console.log("[RewardsBot] Quiz o Poll detectado. Monitoreando resolución...");
+                let lastActionTime = Date.now();
+                let totalElapsed = 0;
+                
+                const updateAction = () => {
+                  lastActionTime = Date.now();
+                };
+                document.addEventListener("click", updateAction);
 
-              const interval = setInterval(() => {
-                totalElapsed += 2000;
-                const quizActive = isQuizOrPollPresent();
-                const idleTime = Date.now() - (window.lastRewardsActionTime || lastActionTime);
+                const interval = setInterval(() => {
+                  totalElapsed += 2000;
+                  const quizActive = isQuizOrPollPresent();
+                  const idleTime = Date.now() - (window.lastRewardsActionTime || lastActionTime);
 
-                console.log(`[RewardsBot] Monitoreo de Quiz: activo=${quizActive}, inactivo por=${Math.round(idleTime/1000)}s, total=${Math.round(totalElapsed/1000)}s`);
+                  console.log(`[RewardsBot] Monitoreo de Quiz: activo=${quizActive}, inactivo por=${Math.round(idleTime/1000)}s, total=${Math.round(totalElapsed/1000)}s`);
 
-                if ((!quizActive && idleTime > 8000) || idleTime > 25000 || totalElapsed > 90000) {
-                  console.log("[RewardsBot] El quiz/poll ha terminado o se alcanzó el timeout. Cerrando pestaña...");
-                  clearInterval(interval);
-                  document.removeEventListener("click", updateAction);
+                  if ((!quizActive && idleTime > 8000) || idleTime > 25000 || totalElapsed > 90000) {
+                    console.log("[RewardsBot] El quiz/poll ha terminado o se alcanzó el timeout. Cerrando pestaña...");
+                    clearInterval(interval);
+                    document.removeEventListener("click", updateAction);
+                    chrome.runtime.sendMessage({ action: "closeMyTab" });
+                  }
+                }, 2000);
+              } else {
+                console.log("[RewardsBot] Tarea de visita simple detectada. Programando cierre en 10s...");
+                setTimeout(() => {
+                  console.log("[RewardsBot] 10s transcurridos. Cerrando pestaña de visita...");
                   chrome.runtime.sendMessage({ action: "closeMyTab" });
-                }
-              }, 2000);
-            } else {
-              console.log("[RewardsBot] Tarea de visita simple detectada. Programando cierre en 10s...");
-              setTimeout(() => {
-                console.log("[RewardsBot] 10s transcurridos. Cerrando pestaña de visita...");
-                chrome.runtime.sendMessage({ action: "closeMyTab" });
-              }, 10000);
-            }
-          }, 3500);
+                }, 10000);
+              }
+            }, 3500);
+          }
+        } else {
+          // Tarea promocional o puzzle en otra página de Bing (ej: spotlight, set)
+          console.log("[RewardsBot] Tarea de Bing (no búsqueda) detectada. Simulando presencia y programando cierre en 10s...");
+          if (window.RewardsUtils && window.RewardsUtils.Human) {
+            try {
+              window.scrollBy({ top: 300, behavior: 'smooth' });
+            } catch(e) {}
+          }
+          setTimeout(() => {
+            console.log("[RewardsBot] 10s transcurridos en tarea promocional. Cerrando pestaña...");
+            chrome.runtime.sendMessage({ action: "closeMyTab" });
+          }, 10000);
         }
       } else {
         console.log("[RewardsBot] Auto-solver y lectura omitidos: la sesión no está activa y no es una tarea de Rewards.");
@@ -2294,7 +2309,7 @@ async function claimTask(sectionKey, taskIndex) {
 
   try {
     await claimSingleTask(task);
-    await waitForTaskTabClose(65000);
+    await waitForTaskTabClose(18000);
     
     // v4.5: Esperar 3 segundos para que React re-renderice el dashboard
     await new Promise(r => setTimeout(r, 3000));
@@ -2406,7 +2421,7 @@ async function runClaimAll() {
 
     try {
       await claimSingleTask(task);
-      await waitForTaskTabClose(65000);
+      await waitForTaskTabClose(18000);
       
       // v4.5: Re-escanear el DOM antes de verificar completado
       await new Promise(r => setTimeout(r, 2000));
@@ -2516,31 +2531,88 @@ async function runClaimAll() {
 async function claimSingleTask(task) {
   console.log(`[RewardsBot] Reclamando tarea: "${task.title}" (URL: ${task.url})`);
 
-  let opened = false;
-  if (task.url && typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+  // 1. Notificar al background que prepare el seguimiento de pestaña de tarea
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
     try {
-      const res = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: "openTaskTab", url: task.url }, (response) => {
-          resolve(response);
-        });
+      await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: "prepareForTaskTab" }, resolve);
       });
-      if (res && res.success) {
-        opened = true;
-        console.log(`[RewardsBot] Pestaña de tarea abierta determinísticamente (ID: ${res.tabId})`);
-      }
-    } catch (e) {
-      console.log("[RewardsBot] Error solicitando openTaskTab al background:", e);
+    } catch (e) {}
+  }
+
+  // 2. Buscar elemento DOM en la página (usando task.element o re-escaneo si React re-renderizó)
+  let cardEl = task.element;
+  if (!cardEl || !document.contains(cardEl)) {
+    if (task.url) {
+      try {
+        const urlObj = new URL(task.url);
+        const basePath = urlObj.pathname;
+        if (basePath && basePath.length > 2) {
+          cardEl = document.querySelector(`a[href*="${basePath}"]`);
+        }
+      } catch (e) {}
     }
   }
 
-  if (!opened) {
-    // Fallback: clic simulado en elemento o window.open
-    if (task.element) {
-      task.element.setAttribute("target", "_blank");
-      if (window.RewardsUtils && window.RewardsUtils.Human) {
-        await window.RewardsUtils.Human.click(task.element);
+  let openedByClick = false;
+
+  // 3. PRIORIDAD: Clic físico/humano en el elemento de la tarjeta para registrar la telemetría nativa de Microsoft
+  if (cardEl && document.contains(cardEl)) {
+    try {
+      // Asegurar que abra en nueva pestaña sin redirigir el panel actual
+      cardEl.setAttribute("target", "_blank");
+      cardEl.setAttribute("rel", "noopener noreferrer");
+
+      // Scroll suave hacia la tarjeta para visibilidad
+      try {
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 350));
+
+      console.log(`[RewardsBot] 🖱️ Ejecutando clic nativo en tarjeta: "${task.title}"`);
+      
+      // Simulación de secuencia de eventos de ratón
+      if (window.RewardsUtils && window.RewardsUtils.Human && window.RewardsUtils.Human.click) {
+        await window.RewardsUtils.Human.click(cardEl);
       } else {
-        task.element.click();
+        const evtOpts = { bubbles: true, cancelable: true, view: window, ctrlKey: true };
+        cardEl.dispatchEvent(new MouseEvent('mousedown', evtOpts));
+        cardEl.dispatchEvent(new MouseEvent('mouseup', evtOpts));
+        cardEl.click();
+      }
+
+      // Esperar brevemente para verificar si el clic abrió la pestaña
+      await new Promise(r => setTimeout(r, 1200));
+
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        const check = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ action: "getActiveTaskTab" }, resolve);
+        }).catch(() => null);
+        if (check && check.activeTaskTabId) {
+          openedByClick = true;
+          console.log(`[RewardsBot] Pestaña de tarea detectada vía clic nativo (ID: ${check.activeTaskTabId})`);
+        }
+      }
+    } catch (err) {
+      console.log("[RewardsBot] Error en clic nativo de tarjeta:", err);
+    }
+  }
+
+  // 4. Fallback determinista si el clic no abrió la pestaña (ej: popup bloqueado o evento prevenido)
+  if (!openedByClick) {
+    if (task.url && typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      console.log(`[RewardsBot] Fallback: Abriendo pestaña directamente vía openTaskTab para "${task.title}"...`);
+      try {
+        const res = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ action: "openTaskTab", url: task.url }, (response) => {
+            resolve(response);
+          });
+        });
+        if (res && res.success) {
+          console.log(`[RewardsBot] Pestaña abierta determinísticamente (ID: ${res.tabId})`);
+        }
+      } catch (e) {
+        console.log("[RewardsBot] Error solicitando openTaskTab al background:", e);
       }
     } else if (task.url) {
       window.open(task.url, "_blank");
