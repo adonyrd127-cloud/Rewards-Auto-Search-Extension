@@ -673,26 +673,52 @@ function waitForTabLoad(tabId, timeoutMs = 10000) {
 // Abrir el dashboard de Rewards para que los content scripts trabajen
 async function openRewardsDashboard(autoClaim = false) {
   if (autoClaim) {
-    await chrome.storage.local.set({ autoClaimPending: true, autoClaimPhase: 'dashboard' });
-  }
-
-  if (autoClaim) {
     await chrome.storage.local.set({ autoClaimPending: true });
   }
 
-  // Siempre comenzamos en /dashboard para reclamar primero el Conjunto Diario
-  const targetUrl = autoClaim ? "https://rewards.bing.com/dashboard#autoClaim=true" : "https://rewards.bing.com/dashboard";
-  const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
+  // Comprobar si el usuario ya está en una pestaña activa de Rewards (/earn o /dashboard)
+  const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  let isAlreadyOnEarn = false;
   let targetTabId = null;
 
-  if (tabs.length > 0) {
-    targetTabId = tabs[0].id;
+  if (activeTabs.length > 0 && activeTabs[0].url && activeTabs[0].url.includes("rewards.bing.com")) {
+    targetTabId = activeTabs[0].id;
+    if (activeTabs[0].url.includes("/earn")) {
+      isAlreadyOnEarn = true;
+    }
+  }
+
+  if (!targetTabId) {
+    const tabs = await chrome.tabs.query({ url: "*://rewards.bing.com/*" });
+    if (tabs.length > 0) {
+      targetTabId = tabs[0].id;
+      if (tabs[0].url && tabs[0].url.includes("/earn")) {
+        isAlreadyOnEarn = true;
+      }
+    }
+  }
+
+  // Si ya está en /earn, mantenemos en /earn para no reiniciar flujo; de lo contrario empezamos en /dashboard
+  const targetUrl = isAlreadyOnEarn
+    ? (autoClaim ? "https://rewards.bing.com/earn#autoClaim=true" : "https://rewards.bing.com/earn")
+    : (autoClaim ? "https://rewards.bing.com/dashboard#autoClaim=true" : "https://rewards.bing.com/dashboard");
+
+  if (targetTabId) {
     await registerAutomationTab(targetTabId);
-    await appendActivityLog("🎯 Navegando y recargando Microsoft Rewards (Panel)...");
-    await chrome.tabs.update(targetTabId, { url: targetUrl, active: true });
-    try {
-      await chrome.tabs.reload(targetTabId);
-    } catch(e) {}
+    await appendActivityLog(`🎯 Preparando Microsoft Rewards (${isAlreadyOnEarn ? 'Ganar' : 'Panel'})...`);
+    
+    const currentTab = await chrome.tabs.get(targetTabId).catch(() => null);
+    const currentUrl = currentTab?.url || '';
+    
+    // Si la URL es diferente, navegar. Si ya estamos en la misma URL, asegurar foco y notificar
+    if (!currentUrl.includes(isAlreadyOnEarn ? '/earn' : '/dashboard')) {
+      await chrome.tabs.update(targetTabId, { url: targetUrl, active: true });
+    } else {
+      await chrome.tabs.update(targetTabId, { active: true });
+      if (autoClaim) {
+        chrome.tabs.sendMessage(targetTabId, { action: "startAutoClaimAll" }).catch(() => {});
+      }
+    }
   } else {
     // Abrir nueva pestaña visible en Rewards
     const newTab = await createTabSafe({ url: targetUrl, active: true });
@@ -700,14 +726,14 @@ async function openRewardsDashboard(autoClaim = false) {
       targetTabId = newTab.id;
       await registerAutomationTab(targetTabId);
       await trackOpenedTab(targetTabId);
-      await appendActivityLog("🎯 Abriendo Microsoft Rewards (Panel) para reclamar Conjunto Diario");
+      await appendActivityLog(`🎯 Abriendo Microsoft Rewards (${isAlreadyOnEarn ? 'Ganar' : 'Panel'})...`);
     }
   }
 
   if (targetTabId && autoClaim) {
     setTimeout(() => {
       chrome.tabs.sendMessage(targetTabId, { action: "startAutoClaimAll" }).catch(() => {});
-    }, 2500);
+    }, 2000);
   }
 }
 

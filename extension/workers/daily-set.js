@@ -172,38 +172,43 @@ window.RewardsWorkers = window.RewardsWorkers || {};
   /**
    * Detecta si una tarjeta individual está completada usando múltiples heurísticas.
    */
-  function _isCardCompleted(card, parentContainer, fullText) {
-    if (!card && !parentContainer) return false;
+  function _isCardCompleted(card, parentContainer) {
+    const el = card || parentContainer;
+    if (!el) return false;
+
+    // Solo inspeccionar dentro del ámbito de ESTA tarjeta individual (nunca contenedor de múltiples enlaces)
+    const scope = (parentContainer && parentContainer.querySelectorAll && parentContainer.querySelectorAll('a[href]').length <= 1) ? parentContainer : card;
+    const text = (card ? (card.innerText || card.textContent || '') : '') + ' ' + 
+                 (scope !== card ? (scope.innerText || scope.textContent || '') : '');
     
     // 1. Textos explícitos
-    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText)) {
+    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(text)) {
       return true;
     }
     
     // 2. Caracteres Unicode de checkmark
-    if (/[✓✔✅]/.test(fullText)) {
+    if (/[✓✔✅]/.test(text)) {
       return true;
     }
 
-    const container = parentContainer || card;
-    if (container && container.querySelector) {
+    if (scope && scope.querySelector) {
       // 3. Clases de estado positivo de Tailwind y Microsoft
-      if (container.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i]')) {
+      if (scope.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i]')) {
         return true;
       }
 
       // 4. Chequear cualquier SVG con color verde o polyline de tick
-      const svgs = container.querySelectorAll('svg');
+      const svgs = scope.querySelectorAll('svg');
       for (const svg of svgs) {
         const html = svg.outerHTML || '';
-        if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|green|check/i.test(html)) {
+        if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669|green|check/i.test(html)) {
           return true;
         }
       }
     }
 
     // 5. Helper DOM
-    if (DOM && DOM.hasCompletionMark && (DOM.hasCompletionMark(card) || (parentContainer && DOM.hasCompletionMark(parentContainer)))) {
+    if (DOM && DOM.hasCompletionMark && DOM.hasCompletionMark(scope)) {
       return true;
     }
 
@@ -216,29 +221,14 @@ window.RewardsWorkers = window.RewardsWorkers || {};
    */
   function _findCardContainer(card) {
     if (!card) return card;
-    let node = card;
-    for (let i = 0; i < 4; i++) {
-      if (!node.parentElement || node.parentElement === document.body || node.parentElement.tagName === 'MAIN') {
-        break;
-      }
-      const parent = node.parentElement;
-      const text = parent.innerText || '';
-      // Si el texto incluye palabras de completado y el nodo actual no, este padre es el contenedor de la tarjeta
-      if (/completad|✔|✓|✅/i.test(text) && !/completad|✔|✓|✅/i.test(node.innerText || '')) {
-        node = parent;
-        break;
-      }
-      // Si el padre contiene múltiples enlaces a bing.com con diferentes URLs, el padre es el grid
-      const siblingCards = parent.querySelectorAll('a.group\\/ctrl, a[href*="bing.com/search"]');
-      if (siblingCards.length > 1) {
-        break;
-      }
-      node = parent;
-      if (node.matches && node.matches('div[class*="card" i], div[class*="item" i], li, article, mee-card, [data-bi-area]')) {
-        break;
+    const parent = card.parentElement;
+    if (parent && parent !== document.body && parent.tagName !== 'SECTION' && parent.tagName !== 'MAIN') {
+      const links = parent.querySelectorAll('a[href]');
+      if (links.length === 1) {
+        return parent;
       }
     }
-    return node;
+    return card;
   }
 
   // ---------------------------------------------------------------------------
@@ -332,7 +322,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
           points = _extractPoints(fullText) || '+10';
         }
 
-        const completed = _isCardCompleted(card, parentContainer, fullText);
+        const completed = _isCardCompleted(card, parentContainer);
 
         // Si no tiene puntos detectables Y no tiene marca de completado, verificar si es tarea válida
         if (!points && !completed) {

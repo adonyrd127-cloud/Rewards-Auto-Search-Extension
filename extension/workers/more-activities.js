@@ -244,54 +244,56 @@ window.RewardsWorkers = window.RewardsWorkers || {};
   // API pública
   // ---------------------------------------------------------------------------
 
-  function _isCardCompleted(card, parentContainer, fullText) {
-    if (!card && !parentContainer) return false;
-    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText)) return true;
-    if (/[✓✔✅]/.test(fullText)) return true;
+  function _isCardCompleted(card, parentContainer) {
+    const el = card || parentContainer;
+    if (!el) return false;
 
-    const container = parentContainer || card;
-    if (container && container.querySelector) {
-      if (container.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i]')) {
+    // Solo inspeccionar dentro del ámbito de ESTA tarjeta individual (nunca contenedor de múltiples enlaces)
+    const scope = (parentContainer && parentContainer.querySelectorAll && parentContainer.querySelectorAll('a[href]').length <= 1) ? parentContainer : card;
+    const text = (card ? (card.innerText || card.textContent || '') : '') + ' ' + 
+                 (scope !== card ? (scope.innerText || scope.textContent || '') : '');
+
+    // 1. Textos explícitos de completado dentro de ESTA tarjeta
+    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(text)) {
+      return true;
+    }
+    if (/[✓✔✅]/.test(text)) {
+      return true;
+    }
+
+    // 2. Indicadores de estado positivo o checkmark dentro de ESTA tarjeta
+    if (scope.querySelector) {
+      if (scope.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i], [class*="claimed" i]')) {
         return true;
       }
-      const svgs = container.querySelectorAll('svg');
+      const svgs = scope.querySelectorAll('svg');
       for (const svg of svgs) {
         const html = svg.outerHTML || '';
-        if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|green|check/i.test(html)) {
+        if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669/i.test(html)) {
           return true;
         }
       }
     }
 
-    if (DOM && DOM.hasCompletionMark && (DOM.hasCompletionMark(card) || (parentContainer && DOM.hasCompletionMark(parentContainer)))) {
+    if (DOM && DOM.hasCompletionMark && DOM.hasCompletionMark(scope)) {
       return true;
     }
+
     return false;
   }
 
   function _findCardContainer(card) {
     if (!card) return card;
-    let node = card;
-    for (let i = 0; i < 4; i++) {
-      if (!node.parentElement || node.parentElement === document.body || node.parentElement.tagName === 'MAIN') {
-        break;
-      }
-      const parent = node.parentElement;
-      const text = parent.innerText || '';
-      if (/completad|✔|✓|✅/i.test(text) && !/completad|✔|✓|✅/i.test(node.innerText || '')) {
-        node = parent;
-        break;
-      }
-      const siblingCards = parent.querySelectorAll('a.group\\/ctrl, a[href*="bing.com/search"]');
-      if (siblingCards.length > 1) {
-        break;
-      }
-      node = parent;
-      if (node.matches && node.matches('div[class*="card" i], div[class*="item" i], li, article, mee-card, [data-bi-area]')) {
-        break;
+    // La tarjeta <a> en sí misma es el contenedor principal de la actividad.
+    // Solo si tiene un contenedor padre exclusivo (que no tenga otros enlaces o tarjetas), lo consideramos.
+    const parent = card.parentElement;
+    if (parent && parent !== document.body && parent.tagName !== 'SECTION' && parent.tagName !== 'MAIN') {
+      const links = parent.querySelectorAll('a[href]');
+      if (links.length === 1) {
+        return parent;
       }
     }
-    return node;
+    return card;
   }
 
   /**
@@ -307,10 +309,13 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       if (_shouldIgnoreUrl(url)) return null;
 
       const parentContainer = _findCardContainer(card);
-      const fullText = (card.innerText || card.textContent || '') + ' ' + (parentContainer ? (parentContainer.innerText || parentContainer.textContent || '') : '');
+      const fullText = (card.innerText || card.textContent || '') + ' ' + (parentContainer && parentContainer !== card ? (parentContainer.innerText || parentContainer.textContent || '') : '');
       
       // Ignorar tareas bloqueadas exclusivas de la app móvil
-      if (/\b(bloquead[oa]s?|locked|solo en la aplicación|app only)\b/i.test(fullText)) {
+      if (/\b(bloquead[oa]s?|locked|solo\s+(?:en\s+)?la\s+aplicaci[oó]n|app\s+only|rewards\s+app\s+only)\b/i.test(fullText) ||
+          card.querySelector('[class*="lock" i], svg[class*="lock" i]') ||
+          (parentContainer && parentContainer.querySelector && parentContainer.querySelector('[class*="lock" i]'))) {
+        console.log(`${TAG} Ignorando tarea exclusiva de app móvil o bloqueada: "${url}"`);
         return null;
       }
 
@@ -341,7 +346,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         points = _extractPoints(fullText);
       }
 
-      const hasCheckmark = _isCardCompleted(card, parentContainer, fullText);
+      const hasCheckmark = _isCardCompleted(card, parentContainer);
 
       // Si no tiene puntos detectables Y no tiene marca de completado, comprobar si es enlace de tarea válido
       if (!points && !hasCheckmark) {

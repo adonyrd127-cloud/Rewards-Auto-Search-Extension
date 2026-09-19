@@ -126,14 +126,22 @@ function isCardCompleted(task) {
     }
   }
   
-  // Fallback: verificación manual con múltiples patrones
-  const parentContainer = el.closest('div[class*="card"], [class*="item"], li, article, section, [class*="group"]') || el.parentElement || el;
-  const fullText = (el.innerText || '') + ' ' + (parentContainer.innerText || '');
+  // Asegurar que solo verificamos dentro del ámbito EXCLUSIVO de esta tarjeta (no contenedores de múltiples tarjetas)
+  let scope = el;
+  const parent = el.parentElement;
+  if (parent && parent !== document.body && parent.tagName !== 'SECTION' && parent.tagName !== 'MAIN') {
+    const links = parent.querySelectorAll('a[href]');
+    if (links.length === 1) {
+      scope = parent;
+    }
+  }
+
+  const text = (el.innerText || el.textContent || '').trim() + (scope !== el ? ' ' + (scope.innerText || scope.textContent || '').trim() : '');
   
   const hasCheckmark = 
-    parentContainer.querySelector('.text-statusPositiveTintFg, [class*="statusPositive"], [class*="StatusPositive"], .c-indicator-check, [class*="checkmark"], [class*="complete"], [class*="done"], [class*="success"], [class*="claimed"]') !== null || 
-    /\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(fullText) ||
-    /[✓✔✅]/.test(fullText);
+    scope.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i], [class*="claimed" i]') !== null || 
+    /\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(text) ||
+    /[✓✔✅]/.test(text);
     
   return hasCheckmark;
 }
