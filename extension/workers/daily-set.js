@@ -170,45 +170,84 @@ window.RewardsWorkers = window.RewardsWorkers || {};
   }
 
   /**
+   * Helper para verificar si la promoción está marcada como completada en var dashboard
+   */
+  function _checkDashboardPromotions(url, title) {
+    try {
+      const scripts = document.querySelectorAll('script');
+      for (const s of scripts) {
+        if (s.innerText && s.innerText.includes('dashboard')) {
+          const match = s.innerText.match(/var\s+dashboard\s*=\s*(\{[\s\S]*?\});/);
+          if (match && match[1]) {
+            const db = JSON.parse(match[1]);
+            if (db) {
+              const dsp = db.dailySetPromotions || {};
+              const list = Array.isArray(dsp) ? dsp : Object.values(dsp).flat();
+              for (const promo of list) {
+                if (promo && (promo.complete === true || (promo.pointProgressMax > 0 && promo.pointProgress >= promo.pointProgressMax))) {
+                  const dest = promo.destinationUrl || '';
+                  const promoTitle = promo.title || '';
+                  const cleanUrl = url ? url.split('?')[0] : '';
+                  if ((cleanUrl && dest && dest.includes(cleanUrl)) || (title && promoTitle && promoTitle.toLowerCase().includes(title.toLowerCase().substring(0, 15)))) {
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch(e) {}
+    return false;
+  }
+
+  /**
    * Detecta si una tarjeta individual está completada usando múltiples heurísticas.
    */
   function _isCardCompleted(card, parentContainer) {
-    const el = card || parentContainer;
-    if (!el) return false;
+    const container = parentContainer || (DOM.findCardContainer ? DOM.findCardContainer(card) : card);
+    const elementsToCheck = [card, container].filter(Boolean);
 
-    // Solo inspeccionar dentro del ámbito de ESTA tarjeta individual (nunca contenedor de múltiples enlaces)
-    const scope = (parentContainer && parentContainer.querySelectorAll && parentContainer.querySelectorAll('a[href]').length <= 1) ? parentContainer : card;
-    const text = (card ? (card.innerText || card.textContent || '') : '') + ' ' + 
-                 (scope !== card ? (scope.innerText || scope.textContent || '') : '');
-    
-    // 1. Textos explícitos
-    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(text)) {
-      return true;
-    }
-    
-    // 2. Caracteres Unicode de checkmark
-    if (/[✓✔✅]/.test(text)) {
-      return true;
-    }
-
-    if (scope && scope.querySelector) {
-      // 3. Clases de estado positivo de Tailwind y Microsoft
-      if (scope.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i]')) {
+    // 1. Helper DOM robusto
+    for (const el of elementsToCheck) {
+      if (DOM && DOM.hasCompletionMark && DOM.hasCompletionMark(el)) {
         return true;
       }
+    }
 
-      // 4. Chequear cualquier SVG con color verde o polyline de tick
-      const svgs = scope.querySelectorAll('svg');
-      for (const svg of svgs) {
-        const html = svg.outerHTML || '';
-        if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669|green|check/i.test(html)) {
+    // 2. Textos explícitos y marcas Unicode
+    const combinedText = elementsToCheck.map(el => (el.innerText || el.textContent || '')).join(' ');
+    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished|reclamad[oa]s?)\b/i.test(combinedText)) {
+      return true;
+    }
+    if (/[✓✔✅]/.test(combinedText)) {
+      return true;
+    }
+
+    // 3. Clases de estado positivo de Tailwind y Microsoft
+    for (const el of elementsToCheck) {
+      if (el.querySelector) {
+        if (el.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i], [class*="claimed" i]')) {
           return true;
+        }
+        const svgs = el.querySelectorAll('svg');
+        for (const svg of svgs) {
+          const html = svg.outerHTML || '';
+          if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669|green|check/i.test(html)) {
+            return true;
+          }
+          const aria = (svg.getAttribute('aria-label') || '').toLowerCase();
+          if (/complete|completad|done|claimed|success|check/i.test(aria)) {
+            return true;
+          }
         }
       }
     }
 
-    // 5. Helper DOM
-    if (DOM && DOM.hasCompletionMark && DOM.hasCompletionMark(scope)) {
+    // 4. Verificación en el estado nativo de Microsoft (var dashboard)
+    const cardUrl = card ? (card.href || card.getAttribute('href') || '') : '';
+    const cardTitle = card ? (card.innerText || '') : '';
+    if (_checkDashboardPromotions(cardUrl, cardTitle)) {
       return true;
     }
 
@@ -217,18 +256,13 @@ window.RewardsWorkers = window.RewardsWorkers || {};
 
   /**
    * Encuentra el verdadero contenedor de la tarjeta ascendiendo desde enlaces o botones
-   * para asegurar que incluya los badges de puntos y los textos de estado (ej: "Completadas").
    */
   function _findCardContainer(card) {
     if (!card) return card;
-    const parent = card.parentElement;
-    if (parent && parent !== document.body && parent.tagName !== 'SECTION' && parent.tagName !== 'MAIN') {
-      const links = parent.querySelectorAll('a[href]');
-      if (links.length === 1) {
-        return parent;
-      }
+    if (DOM && DOM.findCardContainer) {
+      return DOM.findCardContainer(card);
     }
-    return card;
+    return card.parentElement || card;
   }
 
   // ---------------------------------------------------------------------------
@@ -384,19 +418,9 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    // Fallback de respaldo absoluto en el dashboard si no se pudieron extraer tarjetas DOM
-    if (tasks.length === 0 && window.location.pathname.includes('/dashboard')) {
-      console.log(`${TAG} Generando tareas representativas del Conjunto Diario para dashboard...`);
-      for (let i = 1; i <= 3; i++) {
-        tasks.push({
-          title: `Conjunto Diario #${i}`,
-          points: '+10',
-          type: 'search',
-          completed: activityCounter ? (activityCounter.completed >= i) : false,
-          element: null,
-          url: 'https://www.bing.com'
-        });
-      }
+    // Si no se extrajeron tarjetas DOM, no fabricar tareas falsas incompletas que abran pestañas indeseadas
+    if (tasks.length === 0) {
+      console.log(`${TAG} No se detectaron tarjetas en este ciclo de escaneo.`);
     }
 
     console.log(`${TAG} Escaneo completado. Tareas detectadas: ${tasks.length}`);

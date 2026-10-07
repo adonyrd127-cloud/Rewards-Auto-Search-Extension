@@ -165,9 +165,84 @@ chrome.runtime.onInstalled.addListener(async () => {
 // ---------------------------------------------------------------------------
 // Service Worker Recovery — handles SW restart after Chrome kills it.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Daily Claimed Tasks Tracker & Leftover Tabs Cleanup
+// ---------------------------------------------------------------------------
+
+/**
+ * Guarda una tarea como reclamada hoy para que nunca se vuelva a abrir pestaña hoy.
+ */
+async function markTaskClaimedToday(url, title) {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const data = await chrome.storage.local.get("claimedTasksToday");
+    let record = data.claimedTasksToday;
+    if (!record || record.date !== today) {
+      record = { date: today, tasks: [] };
+    }
+    const cleanUrl = url ? url.split('?')[0] : '';
+    const exists = record.tasks.some(t => 
+      (cleanUrl && t.url && t.url.split('?')[0] === cleanUrl) ||
+      (title && t.title && t.title.toLowerCase().trim() === title.toLowerCase().trim())
+    );
+    if (!exists) {
+      record.tasks.push({ url, title, claimedAt: Date.now() });
+      await chrome.storage.local.set({ claimedTasksToday: record });
+      console.log(`[RewardsBot][background] Tarea registrada como completada hoy: "${title}" (${url})`);
+    }
+  } catch (e) {
+    console.error("[RewardsBot] Error en markTaskClaimedToday:", e);
+  }
+}
+
+/**
+ * Cierra cualquier pestaña residual de tareas o automatizaciones que Chrome haya restaurado al iniciar.
+ */
+async function closeLeftoverAutomationTabs() {
+  try {
+    const data = await chrome.storage.local.get(['automationTabIds', 'session']);
+    const autoIds = data.automationTabIds || [];
+    const sessionIds = (data.session && data.session.openedTabIds) || [];
+    const allIds = Array.from(new Set([...autoIds, ...sessionIds]));
+    
+    for (const tabId of allIds) {
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch (e) {}
+    }
+    
+    // Cerrar pestañas en segundo plano no activas que coincidan con URLs de tareas automáticas restauradas
+    const lingering = await chrome.tabs.query({ url: [
+      "*://www.bing.com/search?*rnoreward=1*",
+      "*://*.msn.com/play*",
+      "*://zone.msn.com/*"
+    ] });
+    for (const tab of lingering) {
+      if (tab.id && !tab.active) {
+        try {
+          await chrome.tabs.remove(tab.id);
+          console.log(`[RewardsBot][startup] Pestaña residual cerrada al iniciar: ${tab.id} (${tab.url})`);
+        } catch (e) {}
+      }
+    }
+    await clearAllAutomationTabs();
+  } catch (e) {
+    console.warn("[RewardsBot] Error cerrando pestañas residuales en startup:", e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Service Worker Recovery — handles SW restart after Chrome kills it.
+// ---------------------------------------------------------------------------
 chrome.runtime.onStartup.addListener(async () => {
   console.log('[RewardsBot][startup] Service Worker starting up...');
   try {
+    // 1. Limpiar flags residuales de autoClaim para que no se disparen tareas viejas al abrir el navegador
+    await chrome.storage.local.set({ autoClaimPending: false });
+    
+    // 2. Cerrar pestañas residuales que el navegador haya restaurado de la sesión anterior
+    await closeLeftoverAutomationTabs();
+
     const data = await chrome.storage.local.get(['session', 'settings']);
     const session = data.session;
     
@@ -195,6 +270,7 @@ chrome.runtime.onStartup.addListener(async () => {
     // Re-create periodic alarms
     chrome.alarms.create('check-schedule', { periodInMinutes: 1 });
     chrome.alarms.create('daily-tasks-reminder', { periodInMinutes: 30 });
+    chrome.alarms.create('check-daily-rewards-tasks', { periodInMinutes: 60 });
     updateScheduleAlarm();
   } catch (e) {
     console.error('[RewardsBot][startup] Error during startup recovery:', e);
@@ -274,6 +350,13 @@ function scheduleTaskTabAutoClose(tabId, delayMs = 14000) {
     clearTimeout(activeTaskTimer);
     activeTaskTimer = null;
   }
+
+  // Alarma dinámica como respaldo permanente contra suspensión del Service Worker
+  const alarmName = `close-tab-${tabId}-${Date.now()}`;
+  try {
+    chrome.alarms.create(alarmName, { delayInMinutes: delayMs / 60000 });
+  } catch(e) {}
+
   activeTaskTimer = setTimeout(async () => {
     console.log(`[RewardsBot][background] Safety auto-close timeout (${delayMs}ms) reached for task tab ${tabId}. Closing tab...`);
     activeTaskTimer = null;
@@ -282,6 +365,8 @@ function scheduleTaskTabAutoClose(tabId, delayMs = 14000) {
     } catch (e) {
       // Tab might already be closed
     }
+    await removeTrackedTab(tabId);
+    await unregisterAutomationTab(tabId);
   }, delayMs);
 }
 
@@ -587,6 +672,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Registrar tarea como reclamada hoy para persistencia inter-sesión
+  if (message.action === "markTaskClaimedToday") {
+    markTaskClaimedToday(message.url, message.title)
+      .then(res => sendResponse({ success: true, res }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  // Obtener tareas ya reclamadas hoy
+  if (message.action === "getClaimedTasksToday") {
+    const today = new Date().toISOString().split("T")[0];
+    chrome.storage.local.get("claimedTasksToday").then(res => {
+      const record = res.claimedTasksToday;
+      if (record && record.date === today) {
+        sendResponse({ success: true, tasks: record.tasks || [] });
+      } else {
+        sendResponse({ success: true, tasks: [] });
+      }
+    }).catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  // Marcar todas las tareas del día como completadas
+  if (message.action === "markAllTasksCompletedToday") {
+    const today = new Date().toISOString().split("T")[0];
+    chrome.storage.local.set({ dailyTasksCompletedDate: today, autoClaimPending: false })
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
 });
 
 // Alarm Listener for scheduling and dynamic tab/search alarms
@@ -672,6 +788,16 @@ function waitForTabLoad(tabId, timeoutMs = 10000) {
 
 // Abrir el dashboard de Rewards para que los content scripts trabajen
 async function openRewardsDashboard(autoClaim = false) {
+  const today = new Date().toISOString().split("T")[0];
+  const storageCheck = await chrome.storage.local.get(["dailyTasksCompletedDate"]);
+  
+  // Si las tareas de hoy ya están 100% completadas, no activar autoClaim
+  if (autoClaim && storageCheck.dailyTasksCompletedDate === today) {
+    console.log("[RewardsBot] openRewardsDashboard: Tareas ya completadas hoy. Desactivando autoClaim.");
+    autoClaim = false;
+    await chrome.storage.local.set({ autoClaimPending: false });
+  }
+
   if (autoClaim) {
     await chrome.storage.local.set({ autoClaimPending: true });
   }
@@ -787,9 +913,15 @@ async function checkNewDailyTasks() {
     const stats = await syncUserInfo();
     if (!stats) return;
 
-    const storage = await chrome.storage.local.get(["settings", "lastDailyCheckDate"]);
+    const storage = await chrome.storage.local.get(["settings", "lastDailyCheckDate", "dailyTasksCompletedDate"]);
     const settings = storage.settings || DEFAULT_SETTINGS;
     const today = new Date().toISOString().split("T")[0];
+
+    // Si las tareas diarias ya fueron marcadas como completadas hoy, no abrir nada
+    if (storage.dailyTasksCompletedDate === today) {
+      console.log("[RewardsBot] checkNewDailyTasks: Tareas ya completadas hoy, omitiendo.");
+      return;
+    }
 
     // Notificar una vez al día cuando se detectan nuevas tareas
     if (storage.lastDailyCheckDate !== today) {
@@ -1526,11 +1658,16 @@ async function triggerScheduledRun() {
   // PASO 1: Abrir el dashboard de Rewards para que los content scripts 
   // reclamen las tareas diarias (Daily Set, More Activities, etc.)
   try {
-    console.log("Paso 1: Abriendo dashboard de Rewards para tareas diarias...");
-    await openRewardsDashboard(true);
-    // Dar tiempo suficiente para que los content scripts escaneen y reclamen
-    await new Promise(resolve => setTimeout(resolve, 35000));
-    console.log("Paso 1 completado: Dashboard de Rewards procesado.");
+    const dailyData = await chrome.storage.local.get(["dailyTasksCompletedDate"]);
+    if (dailyData.dailyTasksCompletedDate === todayStr) {
+      console.log(`[RewardsBot] Tareas diarias ya completadas hoy (${todayStr}). Omitiendo Paso 1.`);
+    } else {
+      console.log("Paso 1: Abriendo dashboard de Rewards para tareas diarias...");
+      await openRewardsDashboard(true);
+      // Dar tiempo suficiente para que los content scripts escaneen y reclamen
+      await new Promise(resolve => setTimeout(resolve, 35000));
+      console.log("Paso 1 completado: Dashboard de Rewards procesado.");
+    }
   } catch (e) {
     console.warn("Error abriendo dashboard de Rewards:", e);
   }

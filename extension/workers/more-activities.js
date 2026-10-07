@@ -244,38 +244,80 @@ window.RewardsWorkers = window.RewardsWorkers || {};
   // API pública
   // ---------------------------------------------------------------------------
 
+  /**
+   * Helper para verificar si la actividad extra está marcada como completada en var dashboard
+   */
+  function _checkDashboardPromotions(url, title) {
+    try {
+      const scripts = document.querySelectorAll('script');
+      for (const s of scripts) {
+        if (s.innerText && s.innerText.includes('dashboard')) {
+          const match = s.innerText.match(/var\s+dashboard\s*=\s*(\{[\s\S]*?\});/);
+          if (match && match[1]) {
+            const db = JSON.parse(match[1]);
+            if (db && db.morePromotions && Array.isArray(db.morePromotions)) {
+              for (const promo of db.morePromotions) {
+                if (promo && (promo.complete === true || (promo.pointProgressMax > 0 && promo.pointProgress >= promo.pointProgressMax))) {
+                  const dest = promo.destinationUrl || '';
+                  const promoTitle = promo.title || '';
+                  const cleanUrl = url ? url.split('?')[0] : '';
+                  if ((cleanUrl && dest && dest.includes(cleanUrl)) || (title && promoTitle && promoTitle.toLowerCase().includes(title.toLowerCase().substring(0, 15)))) {
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch(e) {}
+    return false;
+  }
+
   function _isCardCompleted(card, parentContainer) {
-    const el = card || parentContainer;
-    if (!el) return false;
+    const container = parentContainer || (DOM.findCardContainer ? DOM.findCardContainer(card) : card);
+    const elementsToCheck = [card, container].filter(Boolean);
 
-    // Solo inspeccionar dentro del ámbito de ESTA tarjeta individual (nunca contenedor de múltiples enlaces)
-    const scope = (parentContainer && parentContainer.querySelectorAll && parentContainer.querySelectorAll('a[href]').length <= 1) ? parentContainer : card;
-    const text = (card ? (card.innerText || card.textContent || '') : '') + ' ' + 
-                 (scope !== card ? (scope.innerText || scope.textContent || '') : '');
-
-    // 1. Textos explícitos de completado dentro de ESTA tarjeta
-    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(text)) {
-      return true;
-    }
-    if (/[✓✔✅]/.test(text)) {
-      return true;
-    }
-
-    // 2. Indicadores de estado positivo o checkmark dentro de ESTA tarjeta
-    if (scope.querySelector) {
-      if (scope.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i], [class*="claimed" i]')) {
+    // 1. Helper DOM robusto
+    for (const el of elementsToCheck) {
+      if (DOM && DOM.hasCompletionMark && DOM.hasCompletionMark(el)) {
         return true;
       }
-      const svgs = scope.querySelectorAll('svg');
-      for (const svg of svgs) {
-        const html = svg.outerHTML || '';
-        if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669/i.test(html)) {
+    }
+
+    // 2. Textos explícitos de completado dentro de esta tarjeta
+    const combinedText = elementsToCheck.map(el => (el.innerText || el.textContent || '')).join(' ');
+    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished|reclamad[oa]s?)\b/i.test(combinedText)) {
+      return true;
+    }
+    if (/[✓✔✅]/.test(combinedText)) {
+      return true;
+    }
+
+    // 3. Indicadores de estado positivo o checkmark dentro de esta tarjeta
+    for (const el of elementsToCheck) {
+      if (el.querySelector) {
+        if (el.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i], [class*="claimed" i]')) {
           return true;
+        }
+        const svgs = el.querySelectorAll('svg');
+        for (const svg of svgs) {
+          const html = svg.outerHTML || '';
+          if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669/i.test(html)) {
+            return true;
+          }
+          const aria = (svg.getAttribute('aria-label') || '').toLowerCase();
+          if (/complete|completad|done|claimed|success|check/i.test(aria)) {
+            return true;
+          }
         }
       }
     }
 
-    if (DOM && DOM.hasCompletionMark && DOM.hasCompletionMark(scope)) {
+    // 4. Verificación en el estado nativo de Microsoft (var dashboard)
+    const cardUrl = card ? (card.href || card.getAttribute('href') || '') : '';
+    const cardTitle = card ? (card.innerText || '') : '';
+    if (_checkDashboardPromotions(cardUrl, cardTitle)) {
       return true;
     }
 
@@ -284,16 +326,10 @@ window.RewardsWorkers = window.RewardsWorkers || {};
 
   function _findCardContainer(card) {
     if (!card) return card;
-    // La tarjeta <a> en sí misma es el contenedor principal de la actividad.
-    // Solo si tiene un contenedor padre exclusivo (que no tenga otros enlaces o tarjetas), lo consideramos.
-    const parent = card.parentElement;
-    if (parent && parent !== document.body && parent.tagName !== 'SECTION' && parent.tagName !== 'MAIN') {
-      const links = parent.querySelectorAll('a[href]');
-      if (links.length === 1) {
-        return parent;
-      }
+    if (DOM && DOM.findCardContainer) {
+      return DOM.findCardContainer(card);
     }
-    return card;
+    return card.parentElement || card;
   }
 
   /**

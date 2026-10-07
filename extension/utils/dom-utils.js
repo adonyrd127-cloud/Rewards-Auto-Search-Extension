@@ -254,17 +254,27 @@ window.RewardsUtils.DOM = (function () {
     if (!node) return false;
 
     // ── 1. Buscar SVGs con datos de path de checkmark o aria-labels ──
-    const svgs = deepQueryAll(node, ['svg', 'svg path']);
+    const svgs = deepQueryAll(node, ['svg', 'svg path', 'svg polyline']);
     for (const svg of svgs) {
-      const paths = svg.tagName === 'path' ? [svg] : svg.querySelectorAll('path');
-      for (const path of paths) {
-        const d = path.getAttribute('d') || '';
-        if (d.includes('16.17') || d.toLowerCase().includes('checkmark') || d.includes('M9 16.2') || d.includes('M9 16.17')) {
+      if (svg.tagName === 'polyline') {
+        const points = svg.getAttribute('points') || '';
+        if (/20.*6|9.*17/i.test(points) || points.length > 5) {
           return true;
         }
       }
-      const label = (svg.getAttribute('aria-label') || svg.getAttribute('data-icon') || '').toLowerCase();
+      const paths = svg.tagName === 'path' ? [svg] : svg.querySelectorAll('path');
+      for (const path of paths) {
+        const d = path.getAttribute('d') || '';
+        if (d.includes('16.17') || d.toLowerCase().includes('checkmark') || d.includes('M9 16.2') || d.includes('M9 16.17') || /m9\s+16/i.test(d)) {
+          return true;
+        }
+      }
+      const label = (svg.getAttribute('aria-label') || svg.getAttribute('data-icon') || svg.getAttribute('data-icon-name') || '').toLowerCase();
       if (label.includes('checkmark') || label.includes('complete') || label.includes('completad') || label.includes('done') || label.includes('success')) {
+        return true;
+      }
+      const html = svg.outerHTML || '';
+      if (/stroke.*10b981|fill.*10b981|#10b981|#059669|rgb\(16,\s*185,\s*129\)/i.test(html)) {
         return true;
       }
     }
@@ -272,14 +282,17 @@ window.RewardsUtils.DOM = (function () {
     // ── 2. Buscar clases CSS indicadoras de completitud (incluyendo Tailwind moderno) ──
     const completionSelectors = [
       '.text-statusPositiveTintFg',
-      '[class*="statusPositive"]',
-      '[class*="StatusPositive"]',
+      '[class*="statusPositive" i]',
+      '[class*="StatusPositive" i]',
       '.c-indicator-check',
-      '[class*="checkmark"]',
-      '[class*="complete"]',
-      '[class*="done"]',
-      '[class*="success"]',
-      '[class*="claimed"]'
+      '[class*="checkmark" i]',
+      '[class*="complete" i]',
+      '[class*="done" i]',
+      '[class*="success" i]',
+      '[class*="claimed" i]',
+      '[data-status="complete"]',
+      '[data-status="completed"]',
+      '[data-state="completed"]'
     ];
     for (const sel of completionSelectors) {
       try {
@@ -312,14 +325,14 @@ window.RewardsUtils.DOM = (function () {
       }
       // Verificar aria-label en elementos internos
       const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-      if (aria.includes('completad') || aria.includes('completed') || aria.includes('done') || aria.includes('claimed')) {
+      if (aria.includes('completad') || aria.includes('completed') || aria.includes('done') || aria.includes('claimed') || aria.includes('reclamad')) {
         return true;
       }
     }
 
     // ── 3. Buscar texto indicador de completitud ──
     const deepText = getDeepText(node).toLowerCase();
-    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished)\b/i.test(deepText)) {
+    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished|reclamad[oa]s?)\b/i.test(deepText)) {
       return true;
     }
 
@@ -329,6 +342,56 @@ window.RewardsUtils.DOM = (function () {
     }
 
     return false;
+  }
+
+  /**
+   * findCardContainer — Encuentra el verdadero contenedor de tarjeta individual,
+   * ascendiendo desde el enlace o elemento interno sin desbordar a listas o cuadrículas.
+   *
+   * @param {Element} el — Elemento dentro de la tarjeta (ej. <a>, botón, título)
+   * @returns {Element} El contenedor de tarjeta más específico
+   */
+  function findCardContainer(el) {
+    if (!el) return el;
+
+    // Si ya es un elemento de tarjeta oficial
+    if (el.matches && el.matches('mee-card, mee-rewards-daily-set-item, [class*="daily-set-item" i], [class*="c-card" i], [data-bi-area*="card" i]')) {
+      return el;
+    }
+
+    let current = el;
+    let bestContainer = el;
+
+    for (let i = 0; i < 5; i++) {
+      const parent = current.parentElement;
+      if (!parent || parent === document.body || parent.tagName === 'MAIN' || parent.tagName === 'SECTION') {
+        break;
+      }
+
+      // Detener si el padre agrupa múltiples tarjetas distintas
+      const siblingCards = parent.querySelectorAll('mee-card, mee-rewards-daily-set-item, a.group\\/ctrl, [class*="c-card" i], a[href*="bing.com/search"]');
+      if (siblingCards.length > 2) {
+        break;
+      }
+
+      // Si coincide con clases de tarjeta
+      if (parent.matches && parent.matches('div[class*="card" i], div[class*="item" i], li, article, mee-card, .group\\/ctrl, [class*="group/ctrl" i], [data-bi-area]')) {
+        bestContainer = parent;
+      } else if (parent.classList && Array.from(parent.classList).some(c => /card|item|tile/i.test(c))) {
+        bestContainer = parent;
+      }
+
+      // Si este padre contiene texto de completado o checkmark
+      const text = parent.innerText || '';
+      if (/\b(completad[oa]s?|completed|done|listo|hecho)\b/i.test(text) || /[✓✔✅]/.test(text) || parent.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="checkmark" i]')) {
+        bestContainer = parent;
+        break;
+      }
+
+      current = parent;
+    }
+
+    return bestContainer;
   }
 
   /**
@@ -440,6 +503,7 @@ window.RewardsUtils.DOM = (function () {
     deepQueryOne,
     getDeepText,
     hasCompletionMark,
+    findCardContainer,
     findClickable,
     getInnermostCards,
     // Exportamos containsDeep también, puede ser útil externamente
