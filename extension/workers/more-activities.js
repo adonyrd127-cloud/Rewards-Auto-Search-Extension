@@ -91,34 +91,40 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       if (SECTION_HEADINGS.some(h => text.includes(h))) {
         console.log(`${TAG} Sección encontrada por texto: "${rawText}"`);
 
-        // Ascender al contenedor padre de tarjetas (máx. 5 niveles)
+        // Estrategia A: closest <section>, [role="region"] o article
+        const enclosingSec = heading.closest('section, [role="region"], article');
+        if (enclosingSec && enclosingSec.querySelectorAll('a[href]').length > 0) {
+          console.log(`${TAG} Contenedor <section> detectado vía closest con ${enclosingSec.querySelectorAll('a[href]').length} enlaces`);
+          return enclosingSec;
+        }
+
+        // Estrategia B: Buscar en los siguientes hermanos del encabezado (grid de tarjetas)
+        let headerBox = heading;
+        for (let i = 0; i < 3; i++) {
+          if (!headerBox.parentElement || headerBox.parentElement === document.body) break;
+          const nextSib = headerBox.nextElementSibling;
+          if (nextSib && nextSib.querySelectorAll('a[href]').length > 0) {
+            console.log(`${TAG} Grid de tarjetas encontrado en nextElementSibling con ${nextSib.querySelectorAll('a[href]').length} enlaces`);
+            return headerBox.parentElement;
+          }
+          headerBox = headerBox.parentElement;
+        }
+
+        // Estrategia C: Subir cuidadosamente sin englobar toda la página
         let container = heading;
         for (let i = 0; i < 5; i++) {
           const parent = container.parentElement || (container.getRootNode && container.getRootNode().host);
-          if (parent && parent !== document.body && parent !== document.documentElement) {
-            container = parent;
-          } else {
-            break;
+          if (!parent || parent === document.body || parent.tagName === 'MAIN') break;
+          container = parent;
+          const links = container.querySelectorAll('a[href]');
+          if (links.length >= 2) {
+            const hCount = container.querySelectorAll('h1, h2, h3').length;
+            if (hCount <= 2) {
+              console.log(`${TAG} Contenedor acotado validado con ${links.length} enlaces.`);
+              return container;
+            }
           }
         }
-        
-        // Verificar que el contenedor tiene enlaces/tarjetas dentro
-        const links = container.querySelectorAll('a[href]');
-        if (links.length > 0) {
-          console.log(`${TAG} Contenedor validado con ${links.length} enlaces dentro.`);
-          return container;
-        }
-        
-        // Si no encontró enlaces, intentar subir un nivel más
-        const grandParent = container.parentElement;
-        if (grandParent && grandParent !== document.body) {
-          const gpLinks = grandParent.querySelectorAll('a[href]');
-          if (gpLinks.length > 0) {
-            console.log(`${TAG} Contenedor validado (nivel extra) con ${gpLinks.length} enlaces.`);
-            return grandParent;
-          }
-        }
-        
         return container;
       }
     }
@@ -247,6 +253,43 @@ window.RewardsWorkers = window.RewardsWorkers || {};
   /**
    * Helper para verificar si la actividad extra está marcada como completada en var dashboard
    */
+  /**
+   * Comprueba si una promoción del dashboard coincide con la tarea actual por título o query exacto.
+   */
+  function _promoMatchesTask(promo, url, title) {
+    if (!promo) return false;
+    // 1. Coincidencia por título (la más confiable en Microsoft Rewards)
+    if (title && promo.title) {
+      const tNorm = title.toLowerCase().trim().replace(/\s+/g, ' ');
+      const pNorm = promo.title.toLowerCase().trim().replace(/\s+/g, ' ');
+      if (tNorm === pNorm || 
+          (tNorm.length >= 6 && pNorm.includes(tNorm)) || 
+          (pNorm.length >= 6 && tNorm.includes(pNorm))) {
+        return true;
+      }
+    }
+    // 2. Coincidencia por URL completa o parámetro de búsqueda 'q'
+    // NUNCA comparar por ruta base ('bing.com/search') porque todas las búsquedas la comparten.
+    if (url && promo.destinationUrl) {
+      if (url === promo.destinationUrl) return true;
+      try {
+        const u1 = new URL(url);
+        const u2 = new URL(promo.destinationUrl);
+        if (u1.origin === u2.origin && u1.pathname === u2.pathname) {
+          const q1 = u1.searchParams.get('q');
+          const q2 = u2.searchParams.get('q');
+          if (q1 && q2 && q1.toLowerCase().trim() === q2.toLowerCase().trim()) {
+            return true;
+          }
+        }
+      } catch(e) {}
+    }
+    return false;
+  }
+
+  /**
+   * Helper para verificar si la actividad extra está marcada como completada en var dashboard
+   */
   function _checkDashboardPromotions(url, title) {
     try {
       const scripts = document.querySelectorAll('script');
@@ -258,10 +301,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
             if (db && db.morePromotions && Array.isArray(db.morePromotions)) {
               for (const promo of db.morePromotions) {
                 if (promo && (promo.complete === true || (promo.pointProgressMax > 0 && promo.pointProgress >= promo.pointProgressMax))) {
-                  const dest = promo.destinationUrl || '';
-                  const promoTitle = promo.title || '';
-                  const cleanUrl = url ? url.split('?')[0] : '';
-                  if ((cleanUrl && dest && dest.includes(cleanUrl)) || (title && promoTitle && promoTitle.toLowerCase().includes(title.toLowerCase().substring(0, 15)))) {
+                  if (_promoMatchesTask(promo, url, title)) {
                     return true;
                   }
                 }
@@ -303,11 +343,11 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         const svgs = el.querySelectorAll('svg');
         for (const svg of svgs) {
           const html = svg.outerHTML || '';
-          if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669/i.test(html)) {
+          if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669|data-icon-name="CheckMark"/i.test(html)) {
             return true;
           }
           const aria = (svg.getAttribute('aria-label') || '').toLowerCase();
-          if (/complete|completad|done|claimed|success|check/i.test(aria)) {
+          if (/complete|completad|done|claimed|success|checkmark/i.test(aria)) {
             return true;
           }
         }

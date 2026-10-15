@@ -362,30 +362,24 @@ window.RewardsUtils.DOM = (function () {
     let current = el;
     let bestContainer = el;
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       const parent = current.parentElement;
       if (!parent || parent === document.body || parent.tagName === 'MAIN' || parent.tagName === 'SECTION') {
         break;
       }
 
-      // Detener si el padre agrupa múltiples tarjetas distintas
-      const siblingCards = parent.querySelectorAll('mee-card, mee-rewards-daily-set-item, a.group\\/ctrl, [class*="c-card" i], a[href*="bing.com/search"]');
-      if (siblingCards.length > 2) {
+      // CRÍTICO: Si el padre tiene más de 1 enlace con href, es un contenedor de múltiples tarjetas (grid o fila).
+      // NUNCA subir a él porque mezclaría estados de tarjetas vecinas.
+      const links = parent.querySelectorAll('a[href]');
+      if (links.length > 1) {
         break;
       }
 
-      // Si coincide con clases de tarjeta
-      if (parent.matches && parent.matches('div[class*="card" i], div[class*="item" i], li, article, mee-card, .group\\/ctrl, [class*="group/ctrl" i], [data-bi-area]')) {
+      // Si coincide con clases de tarjeta única
+      if (parent.matches && parent.matches('div[class*="card" i], div[class*="item" i], li, article, mee-card, .group\\/ctrl, [class*="group/ctrl" i]')) {
         bestContainer = parent;
       } else if (parent.classList && Array.from(parent.classList).some(c => /card|item|tile/i.test(c))) {
         bestContainer = parent;
-      }
-
-      // Si este padre contiene texto de completado o checkmark
-      const text = parent.innerText || '';
-      if (/\b(completad[oa]s?|completed|done|listo|hecho)\b/i.test(text) || /[✓✔✅]/.test(text) || parent.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="checkmark" i]')) {
-        bestContainer = parent;
-        break;
       }
 
       current = parent;

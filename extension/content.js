@@ -88,16 +88,38 @@ async function syncClaimedTasksToday() {
   }
 }
 
+function isSameTask(taskA, taskB) {
+  if (!taskA || !taskB) return false;
+  // 1. Coincidencia por título normalizado
+  if (taskA.title && taskB.title) {
+    const tA = taskA.title.toLowerCase().trim().replace(/\s+/g, ' ');
+    const tB = taskB.title.toLowerCase().trim().replace(/\s+/g, ' ');
+    if (tA === tB || (tA.length >= 6 && tB.includes(tA)) || (tB.length >= 6 && tA.includes(tB))) {
+      return true;
+    }
+  }
+  // 2. Coincidencia por URL completa o parámetro de búsqueda 'q'
+  if (taskA.url && taskB.url) {
+    if (taskA.url === taskB.url) return true;
+    try {
+      const uA = new URL(taskA.url);
+      const uB = new URL(taskB.url);
+      if (uA.origin === uB.origin && uA.pathname === uB.pathname) {
+        const qA = uA.searchParams.get('q');
+        const qB = uB.searchParams.get('q');
+        if (qA && qB && qA.toLowerCase().trim() === qB.toLowerCase().trim()) {
+          return true;
+        }
+      }
+    } catch(e) {}
+  }
+  return false;
+}
+
 function isTaskClaimedToday(url, title) {
   const today = new Date().toISOString().split("T")[0];
-  if (!cachedClaimedToday || cachedClaimedToday.date !== today) return false;
-  const cleanUrl = url ? url.split('?')[0] : '';
-  return cachedClaimedToday.tasks.some(t => {
-    const tClean = t.url ? t.url.split('?')[0] : '';
-    const matchUrl = cleanUrl && tClean && cleanUrl === tClean;
-    const matchTitle = title && t.title && title.toLowerCase().trim() === t.title.toLowerCase().trim();
-    return matchUrl || matchTitle;
-  });
+  if (!cachedClaimedToday || cachedClaimedToday.date !== today || !Array.isArray(cachedClaimedToday.tasks)) return false;
+  return cachedClaimedToday.tasks.some(t => isSameTask({ url, title }, t));
 }
 
 function getDashboardData() {
@@ -181,14 +203,12 @@ function isCardCompleted(task) {
   // 3. Verificación en el estado oficial de Microsoft (var dashboard / window.dashboard)
   const db = getDashboardData();
   if (db) {
-    const cleanUrl = task.url ? task.url.split('?')[0] : '';
     // Revisar Daily Set
     const dsp = db.dailySetPromotions || {};
     const dspList = Array.isArray(dsp) ? dsp : Object.values(dsp).flat();
     for (const p of dspList) {
       if (p && (p.complete === true || (p.pointProgressMax > 0 && p.pointProgress >= p.pointProgressMax))) {
-        if ((cleanUrl && p.destinationUrl && p.destinationUrl.includes(cleanUrl)) || 
-            (task.title && p.title && p.title.toLowerCase().includes(task.title.toLowerCase().substring(0, 15)))) {
+        if (isSameTask(task, { url: p.destinationUrl, title: p.title })) {
           return true;
         }
       }
@@ -198,8 +218,7 @@ function isCardCompleted(task) {
     if (Array.isArray(mpList)) {
       for (const p of mpList) {
         if (p && (p.complete === true || (p.pointProgressMax > 0 && p.pointProgress >= p.pointProgressMax))) {
-          if ((cleanUrl && p.destinationUrl && p.destinationUrl.includes(cleanUrl)) || 
-              (task.title && p.title && p.title.toLowerCase().includes(task.title.toLowerCase().substring(0, 15)))) {
+          if (isSameTask(task, { url: p.destinationUrl, title: p.title })) {
             return true;
           }
         }
@@ -373,13 +392,9 @@ if (isRewardsPage) {
     const autoClaimPending = storage && storage.autoClaimPending;
     const dailyCompletedToday = storage && storage.dailyTasksCompletedDate === today;
 
-    // Si todas las tareas de hoy ya están completadas, limpiar flags y NO ejecutar auto-claim
-    if (dailyCompletedToday) {
-      console.log(`[RewardsBot] ℹ️ Tareas del día (${today}) ya completadas. Omitiendo auto-claim.`);
-      await chrome.storage.local.set({ autoClaimPending: false });
-      try {
-        history.replaceState(null, '', window.location.pathname);
-      } catch(e) {}
+    // Si no hay solicitud explícita de auto-claim y las tareas de hoy ya están marcadas como completadas
+    if (dailyCompletedToday && !hasHash && !autoClaimPending) {
+      console.log(`[RewardsBot] ℹ️ Tareas del día (${today}) ya completadas y no hay reclamo explícito. Omitiendo auto-claim.`);
       await syncClaimedTasksToday();
       await runFullScan();
       return;

@@ -169,6 +169,31 @@ chrome.runtime.onInstalled.addListener(async () => {
 // Daily Claimed Tasks Tracker & Leftover Tabs Cleanup
 // ---------------------------------------------------------------------------
 
+function isSameTaskBg(urlA, titleA, urlB, titleB) {
+  if (titleA && titleB) {
+    const tA = titleA.toLowerCase().trim().replace(/\s+/g, ' ');
+    const tB = titleB.toLowerCase().trim().replace(/\s+/g, ' ');
+    if (tA === tB || (tA.length >= 6 && tB.includes(tA)) || (tB.length >= 6 && tA.includes(tB))) {
+      return true;
+    }
+  }
+  if (urlA && urlB) {
+    if (urlA === urlB) return true;
+    try {
+      const uA = new URL(urlA);
+      const uB = new URL(urlB);
+      if (uA.origin === uB.origin && uA.pathname === uB.pathname) {
+        const qA = uA.searchParams.get('q');
+        const qB = uB.searchParams.get('q');
+        if (qA && qB && qA.toLowerCase().trim() === qB.toLowerCase().trim()) {
+          return true;
+        }
+      }
+    } catch(e) {}
+  }
+  return false;
+}
+
 /**
  * Guarda una tarea como reclamada hoy para que nunca se vuelva a abrir pestaña hoy.
  */
@@ -177,14 +202,10 @@ async function markTaskClaimedToday(url, title) {
     const today = new Date().toISOString().split("T")[0];
     const data = await chrome.storage.local.get("claimedTasksToday");
     let record = data.claimedTasksToday;
-    if (!record || record.date !== today) {
+    if (!record || record.date !== today || !Array.isArray(record.tasks)) {
       record = { date: today, tasks: [] };
     }
-    const cleanUrl = url ? url.split('?')[0] : '';
-    const exists = record.tasks.some(t => 
-      (cleanUrl && t.url && t.url.split('?')[0] === cleanUrl) ||
-      (title && t.title && t.title.toLowerCase().trim() === title.toLowerCase().trim())
-    );
+    const exists = record.tasks.some(t => isSameTaskBg(url, title, t.url, t.title));
     if (!exists) {
       record.tasks.push({ url, title, claimedAt: Date.now() });
       await chrome.storage.local.set({ claimedTasksToday: record });
@@ -787,13 +808,13 @@ function waitForTabLoad(tabId, timeoutMs = 10000) {
 }
 
 // Abrir el dashboard de Rewards para que los content scripts trabajen
-async function openRewardsDashboard(autoClaim = false) {
+async function openRewardsDashboard(autoClaim = false, isBackgroundAlarm = false) {
   const today = new Date().toISOString().split("T")[0];
   const storageCheck = await chrome.storage.local.get(["dailyTasksCompletedDate"]);
   
-  // Si las tareas de hoy ya están 100% completadas, no activar autoClaim
-  if (autoClaim && storageCheck.dailyTasksCompletedDate === today) {
-    console.log("[RewardsBot] openRewardsDashboard: Tareas ya completadas hoy. Desactivando autoClaim.");
+  // Solo suprimir si es una comprobación periódica en background y ya estaban completadas
+  if (isBackgroundAlarm && autoClaim && storageCheck.dailyTasksCompletedDate === today) {
+    console.log("[RewardsBot] openRewardsDashboard: Tareas ya completadas hoy (alarma en background). Desactivando autoClaim.");
     autoClaim = false;
     await chrome.storage.local.set({ autoClaimPending: false });
   }
@@ -930,7 +951,7 @@ async function checkNewDailyTasks() {
       if (settings.autoClaimDailyTasks === true) {
         console.log("[RewardsBot] Auto-reclamando Conjunto Diario y tareas en segundo plano...");
         await appendActivityLog("⚡ Ejecutando reclamo automático de Conjunto Diario");
-        await openRewardsDashboard(true);
+        await openRewardsDashboard(true, true);
       } else {
         showNotification(
           "🌟 Nuevas Tareas en Microsoft Rewards",

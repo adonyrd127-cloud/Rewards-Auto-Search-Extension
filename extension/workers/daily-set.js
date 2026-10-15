@@ -170,6 +170,40 @@ window.RewardsWorkers = window.RewardsWorkers || {};
   }
 
   /**
+   * Comprueba si una promoción del dashboard coincide con la tarea actual por título o query exacto.
+   */
+  function _promoMatchesTask(promo, url, title) {
+    if (!promo) return false;
+    // 1. Coincidencia por título (la más confiable en Microsoft Rewards)
+    if (title && promo.title) {
+      const tNorm = title.toLowerCase().trim().replace(/\s+/g, ' ');
+      const pNorm = promo.title.toLowerCase().trim().replace(/\s+/g, ' ');
+      if (tNorm === pNorm || 
+          (tNorm.length >= 6 && pNorm.includes(tNorm)) || 
+          (pNorm.length >= 6 && tNorm.includes(pNorm))) {
+        return true;
+      }
+    }
+    // 2. Coincidencia por URL completa o parámetro de búsqueda 'q'
+    // NUNCA comparar por ruta base ('bing.com/search') porque todas las búsquedas la comparten.
+    if (url && promo.destinationUrl) {
+      if (url === promo.destinationUrl) return true;
+      try {
+        const u1 = new URL(url);
+        const u2 = new URL(promo.destinationUrl);
+        if (u1.origin === u2.origin && u1.pathname === u2.pathname) {
+          const q1 = u1.searchParams.get('q');
+          const q2 = u2.searchParams.get('q');
+          if (q1 && q2 && q1.toLowerCase().trim() === q2.toLowerCase().trim()) {
+            return true;
+          }
+        }
+      } catch(e) {}
+    }
+    return false;
+  }
+
+  /**
    * Helper para verificar si la promoción está marcada como completada en var dashboard
    */
   function _checkDashboardPromotions(url, title) {
@@ -185,10 +219,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
               const list = Array.isArray(dsp) ? dsp : Object.values(dsp).flat();
               for (const promo of list) {
                 if (promo && (promo.complete === true || (promo.pointProgressMax > 0 && promo.pointProgress >= promo.pointProgressMax))) {
-                  const dest = promo.destinationUrl || '';
-                  const promoTitle = promo.title || '';
-                  const cleanUrl = url ? url.split('?')[0] : '';
-                  if ((cleanUrl && dest && dest.includes(cleanUrl)) || (title && promoTitle && promoTitle.toLowerCase().includes(title.toLowerCase().substring(0, 15)))) {
+                  if (_promoMatchesTask(promo, url, title)) {
                     return true;
                   }
                 }
@@ -233,11 +264,11 @@ window.RewardsWorkers = window.RewardsWorkers || {};
         const svgs = el.querySelectorAll('svg');
         for (const svg of svgs) {
           const html = svg.outerHTML || '';
-          if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669|green|check/i.test(html)) {
+          if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669|data-icon-name="CheckMark"/i.test(html)) {
             return true;
           }
           const aria = (svg.getAttribute('aria-label') || '').toLowerCase();
-          if (/complete|completad|done|claimed|success|check/i.test(aria)) {
+          if (/complete|completad|done|claimed|success|checkmark/i.test(aria)) {
             return true;
           }
         }
