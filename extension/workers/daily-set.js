@@ -239,39 +239,32 @@ window.RewardsWorkers = window.RewardsWorkers || {};
     const container = parentContainer || (DOM.findCardContainer ? DOM.findCardContainer(card) : card);
     const elementsToCheck = [card, container].filter(Boolean);
 
-    // 1. Helper DOM robusto
+    const combinedText = elementsToCheck.map(el => (el.innerText || el.textContent || '')).join(' ').toLowerCase();
+
+    // ── Pre-filtro negativo: Si muestra puntaje pendiente (+N) y no tiene checkmark ni texto de completado, NO está completada ──
+    const hasPlusPoints = /\+\s*\d+/.test(combinedText);
+    const hasUnicodeCheck = /[✓✔✅]/.test(combinedText);
+    const hasCompletedWord = /\b(completad[oa]s?|completed|claimed|reclamad[oa]s?)\b/i.test(combinedText);
+    const hasPositiveStatus = elementsToCheck.some(el => el.querySelector && el.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], .c-indicator-check'));
+
+    if (hasPlusPoints && !hasUnicodeCheck && !hasCompletedWord && !hasPositiveStatus) {
+      return false;
+    }
+
+    // 1. Textos explícitos y marcas Unicode de completitud
+    if (hasUnicodeCheck || hasCompletedWord) {
+      return true;
+    }
+
+    // 2. Clases de estado positivo de Tailwind y Microsoft
+    if (hasPositiveStatus) {
+      return true;
+    }
+
+    // 3. Helper DOM robusto
     for (const el of elementsToCheck) {
       if (DOM && DOM.hasCompletionMark && DOM.hasCompletionMark(el)) {
         return true;
-      }
-    }
-
-    // 2. Textos explícitos y marcas Unicode
-    const combinedText = elementsToCheck.map(el => (el.innerText || el.textContent || '')).join(' ');
-    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished|reclamad[oa]s?)\b/i.test(combinedText)) {
-      return true;
-    }
-    if (/[✓✔✅]/.test(combinedText)) {
-      return true;
-    }
-
-    // 3. Clases de estado positivo de Tailwind y Microsoft
-    for (const el of elementsToCheck) {
-      if (el.querySelector) {
-        if (el.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i], [class*="claimed" i]')) {
-          return true;
-        }
-        const svgs = el.querySelectorAll('svg');
-        for (const svg of svgs) {
-          const html = svg.outerHTML || '';
-          if (/polyline|points.*20.*6|stroke.*10b981|fill.*10b981|#10b981|#059669|data-icon-name="CheckMark"/i.test(html)) {
-            return true;
-          }
-          const aria = (svg.getAttribute('aria-label') || '').toLowerCase();
-          if (/complete|completad|done|claimed|success|checkmark/i.test(aria)) {
-            return true;
-          }
-        }
       }
     }
 
@@ -429,25 +422,7 @@ window.RewardsWorkers = window.RewardsWorkers || {};
       }
     }
 
-    // Cross-check con el contador oficial de "Tu actividad" -> "Conjunto diario: Actividad: X/3"
-    const activityCounter = _getDailyActivityCounter();
-    if (activityCounter) {
-      console.log(`${TAG} Contador oficial de Tu actividad detectado: ${activityCounter.completed}/${activityCounter.total}`);
-      if (activityCounter.completed === activityCounter.total && activityCounter.total > 0) {
-        tasks.forEach(t => t.completed = true);
-      } else if (activityCounter.completed > 0) {
-        const currentCompleted = tasks.filter(t => t.completed).length;
-        if (currentCompleted < activityCounter.completed) {
-          let needed = activityCounter.completed - currentCompleted;
-          for (const t of tasks) {
-            if (!t.completed && needed > 0) {
-              t.completed = true;
-              needed--;
-            }
-          }
-        }
-      }
-    }
+
 
     // Si no se extrajeron tarjetas DOM, no fabricar tareas falsas incompletas que abran pestañas indeseadas
     if (tasks.length === 0) {

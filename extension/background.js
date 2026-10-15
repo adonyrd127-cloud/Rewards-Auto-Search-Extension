@@ -169,8 +169,24 @@ chrome.runtime.onInstalled.addListener(async () => {
 // Daily Claimed Tasks Tracker & Leftover Tabs Cleanup
 // ---------------------------------------------------------------------------
 
+const GENERIC_TITLES_BG = [
+  'tarea del conjunto diario',
+  'actividad promocional',
+  'actividad extra',
+  'tarjeta perforada',
+  'tarea de rewards',
+  'recompensas de bing',
+  'microsoft rewards'
+];
+
+function isGenericTitleBg(title) {
+  if (!title) return true;
+  const t = title.toLowerCase().trim().replace(/\s+/g, ' ');
+  return GENERIC_TITLES_BG.some(g => t === g || t.includes(g)) || t.length < 5;
+}
+
 function isSameTaskBg(urlA, titleA, urlB, titleB) {
-  if (titleA && titleB) {
+  if (titleA && titleB && !isGenericTitleBg(titleA) && !isGenericTitleBg(titleB)) {
     const tA = titleA.toLowerCase().trim().replace(/\s+/g, ' ');
     const tB = titleB.toLowerCase().trim().replace(/\s+/g, ' ');
     if (tA === tB || (tA.length >= 6 && tB.includes(tA)) || (tB.length >= 6 && tA.includes(tB))) {
@@ -820,6 +836,12 @@ async function openRewardsDashboard(autoClaim = false, isBackgroundAlarm = false
   }
 
   if (autoClaim) {
+    // Si fue acción manual del usuario, limpiar fecha completada para permitir re-ejecución inmediata
+    if (!isBackgroundAlarm) {
+      try {
+        await chrome.storage.local.remove(["dailyTasksCompletedDate"]);
+      } catch(e) {}
+    }
     await chrome.storage.local.set({ autoClaimPending: true });
   }
 
@@ -863,7 +885,12 @@ async function openRewardsDashboard(autoClaim = false, isBackgroundAlarm = false
     } else {
       await chrome.tabs.update(targetTabId, { active: true });
       if (autoClaim) {
-        chrome.tabs.sendMessage(targetTabId, { action: "startAutoClaimAll" }).catch(() => {});
+        chrome.tabs.sendMessage(targetTabId, { action: "startAutoClaimAll", force: true }, (res) => {
+          if (chrome.runtime.lastError) {
+            console.log("[RewardsBot] Content script no respondió. Recargando pestaña...");
+            chrome.tabs.reload(targetTabId);
+          }
+        });
       }
     }
   } else {
@@ -879,7 +906,11 @@ async function openRewardsDashboard(autoClaim = false, isBackgroundAlarm = false
 
   if (targetTabId && autoClaim) {
     setTimeout(() => {
-      chrome.tabs.sendMessage(targetTabId, { action: "startAutoClaimAll" }).catch(() => {});
+      chrome.tabs.sendMessage(targetTabId, { action: "startAutoClaimAll", force: true }, (res) => {
+        if (chrome.runtime.lastError) {
+          console.log("[RewardsBot] Retry content script message failed:", chrome.runtime.lastError.message);
+        }
+      });
     }, 2000);
   }
 }

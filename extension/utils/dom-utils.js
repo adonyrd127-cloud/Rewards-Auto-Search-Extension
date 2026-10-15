@@ -253,43 +253,35 @@ window.RewardsUtils.DOM = (function () {
   function hasCompletionMark(node) {
     if (!node) return false;
 
-    // ── 1. Buscar SVGs con datos de path de checkmark o aria-labels ──
-    const svgs = deepQueryAll(node, ['svg', 'svg path', 'svg polyline']);
-    for (const svg of svgs) {
-      if (svg.tagName === 'polyline') {
-        const points = svg.getAttribute('points') || '';
-        if (/20.*6|9.*17/i.test(points) || points.length > 5) {
-          return true;
-        }
-      }
-      const paths = svg.tagName === 'path' ? [svg] : svg.querySelectorAll('path');
-      for (const path of paths) {
-        const d = path.getAttribute('d') || '';
-        if (d.includes('16.17') || d.toLowerCase().includes('checkmark') || d.includes('M9 16.2') || d.includes('M9 16.17') || /m9\s+16/i.test(d)) {
-          return true;
-        }
-      }
-      const label = (svg.getAttribute('aria-label') || svg.getAttribute('data-icon') || svg.getAttribute('data-icon-name') || '').toLowerCase();
-      if (label.includes('checkmark') || label.includes('complete') || label.includes('completad') || label.includes('done') || label.includes('success')) {
-        return true;
-      }
-      const html = svg.outerHTML || '';
-      if (/stroke.*10b981|fill.*10b981|#10b981|#059669|rgb\(16,\s*185,\s*129\)/i.test(html)) {
-        return true;
-      }
+    const deepText = getDeepText(node).toLowerCase();
+
+    // ── Pre-filtro negativo: Si muestra puntaje pendiente (+N) y no tiene checkmark ni texto de completado, NO está completada ──
+    const hasPlusPoints = /\+\s*\d+/.test(deepText);
+    const hasUnicodeCheck = /[✓✔✅]/.test(deepText);
+    const hasCompletedWord = /\b(completad[oa]s?|completed|claimed|reclamad[oa]s?)\b/i.test(deepText);
+    const hasPositiveStatus = node.querySelector ? !!node.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], .c-indicator-check') : false;
+
+    if (hasPlusPoints && !hasUnicodeCheck && !hasCompletedWord && !hasPositiveStatus) {
+      return false;
     }
 
-    // ── 2. Buscar clases CSS indicadoras de completitud (incluyendo Tailwind moderno) ──
+    // ── 1. Buscar símbolos de check Unicode explícitos (✔, ✓, ✅) ──
+    if (hasUnicodeCheck) {
+      return true;
+    }
+
+    // ── 2. Buscar texto indicador de completitud (estricto: solo completado/completed/claimed/reclamado, nunca 'listo') ──
+    if (hasCompletedWord) {
+      return true;
+    }
+
+    // ── 3. Buscar clases CSS indicadoras de completitud oficiales de Microsoft Fluent / Tailwind ──
     const completionSelectors = [
       '.text-statusPositiveTintFg',
       '[class*="statusPositive" i]',
       '[class*="StatusPositive" i]',
       '.c-indicator-check',
       '[class*="checkmark" i]',
-      '[class*="complete" i]',
-      '[class*="done" i]',
-      '[class*="success" i]',
-      '[class*="claimed" i]',
       '[data-status="complete"]',
       '[data-status="completed"]',
       '[data-state="completed"]'
@@ -297,48 +289,39 @@ window.RewardsUtils.DOM = (function () {
     for (const sel of completionSelectors) {
       try {
         if (node.querySelector && node.querySelector(sel)) return true;
-        if (node.classList && node.matches && node.matches(sel)) return true;
+        if (node.matches && node.matches(sel)) return true;
       } catch (e) {}
     }
 
-    const completionClasses = ['checkmark', 'complete', 'done', 'completed', 'claimed', 'success', 'c-indicator-check'];
-    const allElements = deepQueryAll(node, ['*']);
-    for (const el of allElements) {
-      if (el.classList) {
-        for (const cls of completionClasses) {
-          if (el.classList.contains(cls)) {
-            return true;
-          }
-        }
-        for (const cls of el.classList) {
-          const lower = cls.toLowerCase();
-          if (
-            lower.includes('complete') ||
-            lower.includes('checkmark') ||
-            lower.includes('done') ||
-            lower.includes('claimed') ||
-            lower.includes('statuspositive')
-          ) {
-            return true;
-          }
+    // ── 4. Buscar SVGs con datos de path de checkmark o aria-labels precisos ──
+    const svgs = deepQueryAll(node, ['svg']);
+    for (const svg of svgs) {
+      const polylines = svg.querySelectorAll('polyline');
+      for (const poly of polylines) {
+        const points = poly.getAttribute('points') || '';
+        // Coordenadas exactas del icono checkmark (Feather / Lucide / Fluent: 20 6 9 17 4 12)
+        if (/(?:20\s+6\s+9\s+17\s+4\s+12|9\s+17|20.*6)/i.test(points)) {
+          return true;
         }
       }
-      // Verificar aria-label en elementos internos
-      const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-      if (aria.includes('completad') || aria.includes('completed') || aria.includes('done') || aria.includes('claimed') || aria.includes('reclamad')) {
+
+      const paths = svg.querySelectorAll('path');
+      for (const path of paths) {
+        const d = path.getAttribute('d') || '';
+        if (d.includes('16.17') || d.includes('M9 16.2') || d.includes('M9 16.17') || d.toLowerCase().includes('checkmark')) {
+          return true;
+        }
+      }
+
+      const label = (svg.getAttribute('aria-label') || svg.getAttribute('data-icon') || svg.getAttribute('data-icon-name') || '').toLowerCase();
+      if (label.includes('checkmark') || label.includes('complete') || label.includes('completad')) {
         return true;
       }
-    }
 
-    // ── 3. Buscar texto indicador de completitud ──
-    const deepText = getDeepText(node).toLowerCase();
-    if (/\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished|reclamad[oa]s?)\b/i.test(deepText)) {
-      return true;
-    }
-
-    // ── 4. Buscar símbolos de check Unicode ──
-    if (/[✓✔✅]/.test(deepText)) {
-      return true;
+      const html = svg.outerHTML || '';
+      if (/data-icon-name="CheckMark"/i.test(html) && /#10b981|#059669|rgb\(16,\s*185,\s*129\)/i.test(html)) {
+        return true;
+      }
     }
 
     return false;

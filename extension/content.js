@@ -88,10 +88,26 @@ async function syncClaimedTasksToday() {
   }
 }
 
+const GENERIC_TITLES = [
+  'tarea del conjunto diario',
+  'actividad promocional',
+  'actividad extra',
+  'tarjeta perforada',
+  'tarea de rewards',
+  'recompensas de bing',
+  'microsoft rewards'
+];
+
+function isGenericTitle(title) {
+  if (!title) return true;
+  const t = title.toLowerCase().trim().replace(/\s+/g, ' ');
+  return GENERIC_TITLES.some(g => t === g || t.includes(g)) || t.length < 5;
+}
+
 function isSameTask(taskA, taskB) {
   if (!taskA || !taskB) return false;
-  // 1. Coincidencia por título normalizado
-  if (taskA.title && taskB.title) {
+  // 1. Coincidencia por título normalizado (solo si ninguno es genérico)
+  if (taskA.title && taskB.title && !isGenericTitle(taskA.title) && !isGenericTitle(taskB.title)) {
     const tA = taskA.title.toLowerCase().trim().replace(/\s+/g, ' ');
     const tB = taskB.title.toLowerCase().trim().replace(/\s+/g, ' ');
     if (tA === tB || (tA.length >= 6 && tB.includes(tA)) || (tB.length >= 6 && tA.includes(tB))) {
@@ -230,31 +246,35 @@ function isCardCompleted(task) {
     return false;
   }
 
-  // 4. Localizar el contenedor de la tarjeta usando el helper DOM robusto
+  // 4. Localizar el contenedor de la tarjeta usando el helper DOM robusto (sin subir a sección global)
   const container = (window.RewardsUtils?.DOM?.findCardContainer ? window.RewardsUtils.DOM.findCardContainer(el) : null) || 
-                    el.closest('div[class*="card" i], div[class*="item" i], li, article, section, [class*="group" i]') || 
+                    el.closest('div[class*="card" i], div[class*="item" i], li, article, [class*="group" i]') || 
                     el.parentElement || el;
 
   const elementsToCheck = [el, container].filter(Boolean);
+  const text = elementsToCheck.map(item => (item.innerText || item.textContent || '')).join(' ').toLowerCase();
 
-  // 5. Verificación con hasCompletionMark de dom-utils
+  // Pre-filtro negativo: Si muestra puntaje pendiente (+N) y no tiene checkmark ni texto de completado, NO está completada
+  const hasPlusPoints = /\+\s*\d+/.test(text);
+  const hasUnicodeCheck = /[✓✔✅]/.test(text);
+  const hasCompletedWord = /\b(completad[oa]s?|completed|claimed|reclamad[oa]s?)\b/i.test(text);
+  const hasPositiveStatus = elementsToCheck.some(item => item.querySelector && item.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], .c-indicator-check'));
+
+  if (hasPlusPoints && !hasUnicodeCheck && !hasCompletedWord && !hasPositiveStatus) {
+    return false;
+  }
+
+  // 5. Verificación por checkmark visual o texto explícito
+  if (hasUnicodeCheck || hasCompletedWord || hasPositiveStatus) {
+    return true;
+  }
+
+  // 6. Verificación con hasCompletionMark de dom-utils
   if (window.RewardsUtils && window.RewardsUtils.DOM && window.RewardsUtils.DOM.hasCompletionMark) {
     for (const item of elementsToCheck) {
       if (window.RewardsUtils.DOM.hasCompletionMark(item)) {
         return true;
       }
-    }
-  }
-
-  // 6. Verificación por texto y selectores CSS en ambos elementos
-  const text = elementsToCheck.map(item => (item.innerText || item.textContent || '')).join(' ');
-  const hasTextMark = /\b(completad[oa]s?|listo|hecho|done|completed|claimed|finished|reclamad[oa]s?)\b/i.test(text) || /[✓✔✅]/.test(text);
-  if (hasTextMark) return true;
-
-  for (const item of elementsToCheck) {
-    if (item.querySelector) {
-      const match = item.querySelector('.text-statusPositiveTintFg, [class*="statusPositive" i], [class*="StatusPositive" i], .c-indicator-check, [class*="checkmark" i], [class*="complete" i], [class*="done" i], [class*="success" i], [class*="claimed" i]');
-      if (match) return true;
     }
   }
 
@@ -441,19 +461,18 @@ if (isRewardsPage) {
   // Listener para mensajes desde background/popup
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "startAutoClaimAll") {
-      console.log("[RewardsBot] Recibida orden startAutoClaimAll.");
+      console.log("[RewardsBot] Recibida orden startAutoClaimAll (force:", !!message.force, ").");
       (async () => {
+        panelState.isProcessing = false;
+        if (message.force) {
+          cachedClaimedToday = null;
+          try {
+            await chrome.storage.local.remove(["dailyTasksCompletedDate"]);
+          } catch(e) {}
+        }
         await syncClaimedTasksToday();
         await runFullScan();
-        const pending = countPendingTasks();
-        if (pending > 0) {
-          await runClaimAll();
-        } else if (window.location.pathname.includes('/dashboard') || window.location.pathname === "/") {
-          console.log("[RewardsBot] Conjunto diario al día. Navegando a /earn...");
-          window.location.href = "https://rewards.bing.com/earn#autoClaim=true";
-        } else {
-          showToast('Todo al día', 'Todas las tareas disponibles ya están completadas.', 'success');
-        }
+        await runClaimAll();
       })();
       sendResponse({ success: true });
       return true;
@@ -2255,18 +2274,26 @@ async function updateStatusBar() {
   
   const claimAllBtn = document.getElementById('rap-claim-all');
 
-  if (totalTasks === 0) {
-    updateStatus('Escaneando tareas...', 'info');
+  if (panelState.isProcessing) {
+    updateStatus('Procesando tareas...', 'info');
     if (claimAllBtn) {
       claimAllBtn.disabled = true;
-      claimAllBtn.style.opacity = '0.5';
+      claimAllBtn.style.opacity = '0.7';
+      claimAllBtn.innerHTML = '<span>⏳</span><span>Procesando tareas...</span>';
+    }
+  } else if (totalTasks === 0) {
+    updateStatus('Escaneando tareas...', 'info');
+    if (claimAllBtn) {
+      claimAllBtn.disabled = false;
+      claimAllBtn.style.opacity = '1';
+      claimAllBtn.innerHTML = '<span>🔍</span><span>Escanear y Reclamar</span>';
     }
   } else if (completedTasks === totalTasks) {
     updateStatus('¡Todas las tareas completadas!', 'success');
     if (claimAllBtn) {
-      claimAllBtn.disabled = true;
-      claimAllBtn.style.opacity = '0.5';
-      claimAllBtn.innerHTML = '<span>✅</span><span>Todo Completado</span>';
+      claimAllBtn.disabled = false;
+      claimAllBtn.style.opacity = '1';
+      claimAllBtn.innerHTML = '<span>🔄</span><span>Re-escanear y Reclamar</span>';
     }
   } else {
     const pending = totalTasks - completedTasks;
@@ -2526,27 +2553,48 @@ async function claimStreakBonus() {
 // ─── Reclamar Todo (Secuencial) ───
 async function runClaimAll() {
   const btn = document.getElementById('rap-claim-all');
-  if (!btn) return;
-  panelState.isProcessing = true; // Prevent scan from overwriting task arrays
-  btn.disabled = true;
-  btn.innerHTML = '<span>⏳</span><span>Procesando tareas...</span>';
+  
+  if (panelState.isProcessing) {
+    if (panelState.processingStartedAt && (Date.now() - panelState.processingStartedAt > 35000)) {
+      console.warn("[RewardsBot] panelState.isProcessing restablecido por timeout.");
+      panelState.isProcessing = false;
+    } else {
+      console.log("[RewardsBot] runClaimAll omitido: ya hay un proceso en ejecución.");
+      return;
+    }
+  }
+
+  panelState.isProcessing = true;
+  panelState.processingStartedAt = Date.now();
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span><span>Procesando tareas...</span>';
+  }
   
   updateStatus('Procesando todas las tareas...', 'info');
 
-  const pendingTasks = [];
+  // Si no hay tareas escaneadas, forzar escaneo inicial antes de evaluar
+  const currentTotal = Object.values(panelState.sections).reduce((sum, s) => sum + (s.tasks?.length || 0), 0);
+  if (currentTotal === 0) {
+    panelState.isProcessing = false;
+    await runFullScan();
+    panelState.isProcessing = true;
+  }
+
+  let pendingTasks = [];
   
   // 1. Daily Set — filtrar tareas genuinamente incompletas
-  (panelState.sections.dailySet.tasks || []).filter(t => !t.completed && !isCardCompleted(t) && !isTaskClaimedToday(t.url, t.title)).forEach(t => {
+  (panelState.sections.dailySet.tasks || []).filter(t => !t.completed && !isCardCompleted(t)).forEach(t => {
     pendingTasks.push({ ...t, sectionKey: 'dailySet' });
   });
   
   // 2. More Activities — filtrar tareas genuinamente incompletas
-  (panelState.sections.moreActivities.tasks || []).filter(t => !t.completed && !isCardCompleted(t) && !isTaskClaimedToday(t.url, t.title)).forEach(t => {
+  (panelState.sections.moreActivities.tasks || []).filter(t => !t.completed && !isCardCompleted(t)).forEach(t => {
     pendingTasks.push({ ...t, sectionKey: 'moreActivities' });
   });
 
   // 3. Punch Cards — filtrar tareas genuinamente incompletas
-  (panelState.sections.punchCards.tasks || []).filter(t => !t.completed && !isCardCompleted(t) && !isTaskClaimedToday(t.url, t.title)).forEach(t => {
+  (panelState.sections.punchCards.tasks || []).filter(t => !t.completed && !isCardCompleted(t)).forEach(t => {
     pendingTasks.push({ ...t, sectionKey: 'punchCards' });
   });
 
@@ -2554,17 +2602,34 @@ async function runClaimAll() {
   const streak = panelState.sections.streakBonus.data;
   const hasStreakBonus = streak && streak.bonusAvailable;
 
-  // Si no hay tareas pendientes, terminar de inmediato sin abrir pestañas
+  // Si no encontramos tareas pendientes en primer pase, re-escanear una vez por si el DOM tardó en hidratarse
   if (pendingTasks.length === 0 && !hasStreakBonus) {
-    console.log("[RewardsBot] ℹ️ Todas las tareas ya están completadas hoy. No se abrirán pestañas.");
+    panelState.isProcessing = false;
+    await runFullScan();
+    panelState.isProcessing = true;
+
+    (panelState.sections.dailySet.tasks || []).filter(t => !t.completed && !isCardCompleted(t)).forEach(t => {
+      pendingTasks.push({ ...t, sectionKey: 'dailySet' });
+    });
+    (panelState.sections.moreActivities.tasks || []).filter(t => !t.completed && !isCardCompleted(t)).forEach(t => {
+      pendingTasks.push({ ...t, sectionKey: 'moreActivities' });
+    });
+  }
+
+  // Si definitivamente no hay tareas pendientes en esta página
+  if (pendingTasks.length === 0 && !hasStreakBonus) {
+    console.log("[RewardsBot] ℹ️ Todas las tareas ya están completadas hoy en esta página.");
     updateStatus('¡Todas las tareas ya están al día!', 'success');
-    showToast('Todo al día', 'No quedan tareas pendientes por reclamar hoy.', 'success');
-    btn.disabled = false;
-    btn.innerHTML = '<span>🚀</span><span>Reclamar Todo Automáticamente</span>';
+    showToast('Todo al día', 'No quedan tareas pendientes en esta sección.', 'success');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🚀</span><span>Reclamar Todo Automáticamente</span>';
+    }
     panelState.isProcessing = false;
     
     const isDashboard = window.location.pathname.includes("dashboard") || window.location.pathname === "/";
     if (isDashboard) {
+      console.log("[RewardsBot] Conjunto diario completado en /dashboard. Avanzando a /earn...");
       setTimeout(() => {
         window.location.href = "https://rewards.bing.com/earn#autoClaim=true";
       }, 1000);
